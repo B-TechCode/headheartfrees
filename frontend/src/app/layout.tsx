@@ -50,7 +50,16 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${karla.variable}`}>
+    // data-scroll-behavior opts in explicitly to the smooth scrolling set on
+    // <html> in globals.css. Without it Next warns at runtime that it cannot
+    // tell deliberate smooth scrolling from an accidental inherited rule, and
+    // may override it during router navigations.
+    // https://nextjs.org/docs/messages/missing-data-scroll-behavior
+    <html
+      lang="en"
+      data-scroll-behavior="smooth"
+      className={`${fraunces.variable} ${karla.variable}`}
+    >
       <body className="flex min-h-dvh flex-col">
         {/*
           Keyboard users land here first. It is visually hidden until focused,

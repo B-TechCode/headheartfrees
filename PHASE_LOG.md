@@ -1486,3 +1486,145 @@ Phase 2a, which carries the helplines.
    rather the page led with mobile-reachable numbers only, that is a content
    call I would rather you made.
 
+---
+
+# Phase 3a — Footer trim and scroll-behavior opt-in
+
+**Completed:** 2026-09-04
+**Scope:** three small changes after the Phase 3 review.
+
+---
+
+## 1. Status
+
+**All three done.** One is worth a sentence of correction rather than a clean
+tick: the `scroll-behavior` warning does not appear where I could observe it.
+See §3.
+
+---
+
+## 2. Files
+
+```
+frontend/src/components/layout/Footer.tsx    Navigate column removed, layout rebalanced.
+frontend/src/app/layout.tsx                  data-scroll-behavior="smooth" on <html>.
+PROJECT_BRIEF.md                             §7 gains a Footer subsection ruling the column out.
+```
+
+---
+
+## 3. What was done
+
+### Change 1 — Navigate column removed and the footer rebalanced
+
+`NAVIGATE_LINKS` and its `FooterColumn` are gone. The footer now carries the
+crisis strip (untouched, in place), the brand blurb, the Support column, and the
+"Support this space" line.
+
+The layout needed more than deleting a column. The old grid was
+`sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr]`. Dropping to `[2fr_1fr]` would have
+produced exactly the lopsidedness the change was meant to remove: at `max-w-6xl`
+the 2fr column is about 700px while the brand block is capped at `max-w-sm`
+(384px), leaving roughly 300px of dead space with nothing in it.
+
+Replaced with a flex row anchored to both edges:
+
+```
+flex flex-col gap-10 md:flex-row md:justify-between md:gap-12
+```
+
+The gap between the two blocks is now structural rather than a leftover
+fraction. The brand block gained `min-w-0 max-w-md`, up from `max-w-sm`, so it
+carries a little more of the width now that it is one of two things rather than
+one of three.
+
+**The split waits until `md` (768px), not `sm` (640px).** At 640 the brand text
+at `max-w-md` plus the Support column plus the gap exceeds the available width,
+and the brand would be squeezed into a narrow measure. Below `md` the two blocks
+stack, which cannot be lopsided.
+
+Widths reasoned through, not seen:
+
+| Width | Behaviour |
+|---|---|
+| 320 / 375 / 414 | Stacked. Brand, then Support. |
+| 640 (sm) | Still stacked, deliberately. |
+| 768 (md) | Side by side. ~720px usable, brand up to 448 + gap 48 + Support ~170 fits. |
+| 1024 / 1440 / 1920 | Side by side inside `max-w-6xl`, anchored left and right. |
+
+### Change 2 — the brief now rules the column out
+
+§7's Navbar paragraph referred to "the footer's Navigate column", which would
+have licensed a later phase to rebuild it. It now reads as a Navbar rule plus a
+new **Footer** subsection that describes what the footer contains and states:
+
+> **There is no Navigate column, and one must not be added.** Home, Vent and
+> About are in the navbar; repeating them in the footer left a three-item column
+> too thin to carry its own heading. Removed 2026-09-04. Donate and Feedback
+> must not appear anywhere in the footer either.
+
+The Donate/Feedback prohibition is preserved and now covers the whole footer
+rather than one named column.
+
+### Change 3 — `data-scroll-behavior="smooth"`, with a caveat
+
+Added to `<html>` in `layout.tsx` and confirmed in the rendered output:
+
+```
+<html lang="en" data-scroll-behavior="smooth" class="__variable_d4d11e __variable_08b68a">
+```
+
+**I could not reproduce the warning.** `next build` emits no line matching
+`scroll` or `warn`, before or after the change — I captured the full build log
+both times specifically to check. That is consistent with the linked Next.js
+page: `missing-data-scroll-behavior` is logged by the client at runtime, so it
+surfaces in the browser console and under `next dev`, not in a production build.
+
+So the attribute is correct and is now in place, and the reasoning is sound —
+`globals.css` does set `scroll-behavior: smooth` on `html`, which is exactly the
+condition the warning describes. But I am recording that I verified the
+attribute is present rather than that I watched the warning disappear, because
+only the first of those is something I observed.
+
+---
+
+## 4. Verification actually run
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | **PASS** — exit 0 |
+| `npm run lint` | **PASS** — exit 0 |
+| `npm run build` | **PASS** — 11/11 static pages, exit 0 |
+| `docker compose build frontend` | **PASS** — image built, exit 0 |
+| Six routes still 200 | **PASS** |
+| `Navigate` heading absent from footer | **PASS** — 0 occurrences on every page checked |
+| All 4 Support links present | **PASS** — 4/4 on all six pages |
+| "Support this space" still once per page | **PASS** |
+| `data-scroll-behavior` on `<html>` | **PASS** — present in rendered HTML |
+| Crisis strip unmoved | **PASS** — untouched, still first in the footer |
+
+### NOT verified
+
+- **The rebalanced footer has not been seen at any width.** The `md` breakpoint
+  choice and the two-block anchoring are reasoned from the numbers above, not
+  observed. This is the one change in this batch where "looks right" is the
+  actual acceptance criterion and I cannot supply it.
+- **The scroll-behavior warning was never observed disappearing**, for the
+  reason in §3.
+- Keyboard, screen reader, Lighthouse: unchanged, still not run.
+
+---
+
+## 5. Still open
+
+Unchanged from Phase 3 §10:
+
+1. **`/vent` still 404s** and is now linked from five places rather than six,
+   since the footer Navigate column that carried one of them is gone. Still the
+   most conspicuous dead link in the build. Phase 6.
+2. **`/support` and `/login` still 404.** Phases 8 and 5.
+3. **Contact address is still a placeholder** — `lib/contact.ts` line 20, and
+   the flag on line 24.
+4. **Helpline re-verification cadence** still undecided.
+5. **Privacy policy still needs legal review.**
+

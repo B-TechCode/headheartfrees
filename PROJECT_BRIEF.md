@@ -171,9 +171,18 @@ Every error response uses one consistent shape:
 
 ### Navbar
 `Home · Vent · About` on the left of centre, and on the right either
-**Sign in** or the user's avatar menu. **Donate and Feedback are removed from the
-navbar and from the footer's Navigate column** — the old design had them and they
-must not reappear.
+**Sign in** or the user's avatar menu. **Donate and Feedback must not appear in the
+navbar** — the old design had them and they must not reappear.
+
+### Footer
+The crisis helpline strip, a brand blurb, a Support column (Crisis Resources,
+Community Guidelines, Privacy Policy, Contact Us), and a quiet "Support this space"
+donation link.
+
+**There is no Navigate column, and one must not be added.** Home, Vent and About are
+in the navbar; repeating them in the footer left a three-item column too thin to
+carry its own heading. Removed 2026-09-04. Donate and Feedback must not appear
+anywhere in the footer either.
 
 ### The release flow — build this exactly
 

@@ -5,15 +5,11 @@ import { focusRing } from "@/components/ui/styles";
 import { FOOTER_HELPLINES } from "@/lib/helplines";
 
 /**
- * PROJECT_BRIEF.md §7: Donate and Feedback are removed from the Navigate
- * column. They were in the old design and must not come back.
+ * PROJECT_BRIEF.md §7: the footer has no Navigate column. Home, Vent and About
+ * are in the navbar, and repeating them here left a three-item column too thin
+ * to justify its own heading. Donate and Feedback must not appear in the footer
+ * at all — the old design had them and they must not come back.
  */
-const NAVIGATE_LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/vent", label: "Vent" },
-  { href: "/about", label: "About" },
-] as const;
-
 const SUPPORT_LINKS = [
   { href: "/crisis-resources", label: "Crisis Resources" },
   { href: "/community-guidelines", label: "Community Guidelines" },
@@ -33,12 +29,20 @@ export function Footer() {
       <CrisisStrip />
 
       {/*
-        Asymmetric on purpose: the brand column is twice the width of either
-        link column, so this does not read as an evenly divided four-up grid.
+        Two blocks, anchored to opposite edges rather than sitting in grid
+        columns. With the Navigate column gone, a fractional grid would have
+        left the brand block capped at its max-width with several hundred pixels
+        of dead space beside it — the lopsided look this layout was changed to
+        avoid. justify-between makes the gap between them structural instead.
+
+        The split waits until md rather than sm: at 640px the brand text and the
+        Support column together exceed the available width and the brand would
+        shrink into an awkwardly narrow measure. Below md it stacks, which is
+        symmetrical by construction.
       */}
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] lg:gap-12">
-          <div className="max-w-sm">
+        <div className="flex flex-col gap-10 md:flex-row md:justify-between md:gap-12">
+          <div className="min-w-0 max-w-md">
             <Logo title={null} className="h-8 w-8 text-ink" />
             <p className="mt-4 font-display text-h4 text-ink">A place to put it down.</p>
             <p className="mt-2 text-body-sm text-ink-soft">
@@ -47,7 +51,6 @@ export function Footer() {
             </p>
           </div>
 
-          <FooterColumn title="Navigate" links={NAVIGATE_LINKS} />
           <FooterColumn title="Support" links={SUPPORT_LINKS} />
         </div>
 

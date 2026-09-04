@@ -1,0 +1,62 @@
+# ---- Environment / secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Java / Maven ----
+target/
+*.class
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/.gradle-enterprise/
+.mvn/.develocity/
+dependency-reduced-pom.xml
+release.properties
+pom.xml.versionsBackup
+
+# ---- Node / Next.js ----
+node_modules/
+.next/
+out/
+build/
+dist/
+.next-env.d.ts
+next-env.d.ts
+*.tsbuildinfo
+.npm/
+.pnpm-store/
+.yarn/
+.eslintcache
+
+# ---- Logs ----
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- IDE / editors ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+!.vscode/extensions.json
+.settings/
+.project
+.classpath
+.factorypath
+*.swp
+*.swo
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Docker / local volumes ----
+.docker-data/
+
+# ---- Test / coverage ----
+coverage/
+.nyc_output/

@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/*
+ * Phase 1 placeholders only.
+ *
+ * The real palette, type scale, grain overlay and spacing rhythm are phase 2's
+ * job (PROJECT_BRIEF.md section 8). What matters here is the mechanism: every
+ * colour is a CSS custom property declared in this file and exposed to Tailwind
+ * through @theme, so swapping the supplied palette is a one-file change and no
+ * component ever names a hex value.
+ */
+
+:root {
+  /* Neutral placeholders - deliberately plain, to be replaced wholesale. */
+  --hhf-paper: #fbfaf8;
+  --hhf-ink: #1c1a17;
+  --hhf-ink-muted: #6b6660;
+  --hhf-rule: #e5e1da;
+  --hhf-accent: #8a6a4f;
+}
+
+@theme inline {
+  --color-paper: var(--hhf-paper);
+  --color-ink: var(--hhf-ink);
+  --color-ink-muted: var(--hhf-ink-muted);
+  --color-rule: var(--hhf-rule);
+  --color-accent: var(--hhf-accent);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--hhf-paper);
+    color: var(--hhf-ink);
+  }
+
+  /* Honour the OS setting from the very first phase. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

@@ -1,0 +1,6 @@
+# Local development profile. Activated with SPRING_PROFILES_ACTIVE=local.
+logging:
+  level:
+    com.headheartfrees: DEBUG
+    org.springframework.web: INFO
+    org.springframework.security: INFO

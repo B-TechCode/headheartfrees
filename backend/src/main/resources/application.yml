@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: headheartfrees-backend
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: ${BACKEND_PORT:8080}
+  shutdown: graceful
+  error:
+    # Errors are rendered by the application's own handler, in the shape
+    # documented in PROJECT_BRIEF.md section 6. Never leak internals.
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+
+app:
+  # Filtered by Maven at build time from the project version.
+  version: @project.version@
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+logging:
+  level:
+    root: INFO
+    com.headheartfrees: INFO

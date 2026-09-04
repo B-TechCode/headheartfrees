@@ -196,9 +196,18 @@ cover the page, must not block `/vent`, and must have an obvious close control.
 ### Client-side crisis detection
 Because vent text never reaches the server, safety handling must run in the browser.
 Maintain a keyword list in `lib/safety.ts`. If the textarea content matches, render a
-calm inline panel above the button surfacing the helplines (iCall 9152987821,
-Vandrevala Foundation 1860-2662-345, Crisis Text Line: text HOME to 741741). Do not
-block submission, do not send anything anywhere, do not use alarming language.
+calm inline panel above the button surfacing the helplines (Tele-MANAS 14416,
+Vandrevala Foundation 9999666555, iCall 9152987821 Mon-Sat 10am-8pm, Crisis Text Line:
+text HOME to 741741). Do not block submission, do not send anything anywhere, do not
+use alarming language.
+
+> **Corrected 2026-09-04.** This section previously listed Vandrevala Foundation as
+> 1860-2662-345. That number does not appear on the foundation's own contact page,
+> free-counselling page or FAQ, all of which list only +91 9999 666 555. It was
+> replaced everywhere it appeared. Lead with Tele-MANAS: it is 24/7, free,
+> government-run, available in 20 languages, and 14416 is a short code that is easier
+> to recall in distress. Never imply a line is open when it is not — iCall is
+> Mon-Sat 10am-8pm and must always be shown with its hours.
 
 ---
 

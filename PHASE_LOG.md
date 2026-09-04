@@ -1155,3 +1155,334 @@ Unchanged from the Phase 2 log except where noted:
 4. Visual verification at the seven breakpoints, keyboard traversal, screen
    reader, iOS keyboard, Lighthouse — all still outstanding.
 
+---
+---
+
+# Phase 3 — Static pages
+
+**Completed:** 2026-09-04
+**Scope:** Home and About from the brief's phase table, plus the four Support
+routes you reassigned to this phase so that a dead "Crisis Resources" link does
+not survive to anything public.
+
+---
+
+## 1. Status
+
+**Done.** Six pages, all returning 200, all with unique titles and descriptions
+and exactly one `h1` each.
+
+The headline outcome is not a page, though. It is that **a crisis number that
+had been live in the footer for two phases was wrong**, and re-verifying it was
+the only reason we found out. Details in §3.
+
+---
+
+## 2. Files
+
+```
+frontend/src/
+├── app/
+│   ├── page.tsx                          REWRITTEN. Placeholder deleted in full,
+│   │                                     including the API base URL debug line.
+│   ├── about/page.tsx                    NEW
+│   ├── crisis-resources/page.tsx         NEW
+│   ├── community-guidelines/page.tsx     NEW
+│   ├── privacy/page.tsx                  NEW
+│   └── contact/page.tsx                  NEW
+├── components/
+│   ├── sections/                         (was a lone .gitkeep, now removed)
+│   │   ├── Hero.tsx                      Asymmetric 7/5 split, oversized cropped mark.
+│   │   ├── HowItWorks.tsx                Three steps: arrive, write, release.
+│   │   ├── Promises.tsx                  Replaces the fabricated testimonial block.
+│   │   ├── ClosingAction.tsx             One line, one link.
+│   │   ├── PageHeader.tsx                Shared h1 + standfirst for secondary pages.
+│   │   ├── DonationSection.tsx           Quiet donation block for /about.
+│   │   └── HelplineList.tsx              Helplines as page content, built to be scanned.
+│   ├── ui/
+│   │   ├── Callout.tsx                   NEW primitive. note / important / caution.
+│   │   └── Prose.tsx                     NEW primitive. Long-form typography, 68ch measure.
+│   └── layout/Footer.tsx                 MODIFIED. Reads from lib/helplines.ts, shows hours.
+├── lib/
+│   ├── helplines.ts                      NEW. Single source of truth for crisis numbers.
+│   └── contact.ts                        NEW. The one placeholder address to edit.
+└── styles/globals.css                    MODIFIED. Grain 0.055 -> 0.085, freq 0.9 -> 0.65.
+
+PROJECT_BRIEF.md                          MODIFIED. §7 crisis-detection number corrected.
+```
+
+---
+
+## 3. The Vandrevala correction
+
+**PROJECT_BRIEF.md §7 specified Vandrevala Foundation as 1860-2662-345. That
+number is not on any current Vandrevala page.** Their contact page,
+free-counselling page and FAQ all list only **+91 9999 666 555**. The sources
+still carrying the old number are news posts and directories from 2019–2021.
+
+It had shipped in the footer in Phase 2 and was scheduled to reach
+`lib/safety.ts` in Phase 6. Corrected in all four places you asked for: the new
+crisis page, the footer, and both mentions in the brief.
+
+I could not establish that 1860-2662-345 was formally discontinued — only that
+no operator source carries it. Per the standing rule that a wrong crisis number
+is worse than a missing one, absence of confirmation was treated as
+disqualifying.
+
+### Every number, and where it was verified
+
+| Service | Number | Hours | Verified against |
+|---|---|---|---|
+| Tele-MANAS | 14416 | 24/7 | telemanas.mohfw.gov.in, JIPMER, MoHFW notices |
+| Vandrevala Foundation | 9999666555 | 24/7 | vandrevalafoundation.com contact page |
+| AASRA | 022-27546669 | 24 hours | aasra.info contact page |
+| SNEHA | 044-24640050 | 24 hours | snehaindia.org |
+| iCall | 9152987821 | **Mon–Sat 10am–8pm** | icallhelpline.org |
+| Crisis Text Line | HOME to 741741 | 24/7 | crisistextline.org |
+
+Two numbers were **rejected** rather than included:
+
+- **1860-2662-345** (Vandrevala) — absent from the operator's own site.
+- **9820466726** (AASRA) — widely republished as the AASRA helpline, but on
+  aasra.info it is listed as a named individual's contact, not the helpline.
+  The helpline is the landline above.
+
+SNEHA was checked as you asked and their own site confirmed 044-24640050, so it
+is included. AASRA and SNEHA are both labelled as landlines on the page.
+
+### Hours are now shown everywhere
+
+The footer strip was headed *"these lines are open"*, which the list did not
+keep — iCall does not run overnight. The heading is now *"If you would rather
+talk to someone."* with the subline *"Hours are listed because not every line
+runs all night,"* and every entry carries its hours in both the footer and on
+`/crisis-resources`. Ordering is by availability: Tele-MANAS, Vandrevala, then
+iCall with its hours stated.
+
+`lib/helplines.ts` now holds the one list that the footer, the crisis page and
+the Phase 6 panel all read from. Each entry records `verifiedFrom` for the next
+audit. This is the structural fix for the drift, not just a corrected string.
+
+---
+
+## 4. No fabricated social proof
+
+None of the Figma material was reproduced: no counts, no country figures, no
+percentage, no testimonials, no attributed names. Not as placeholder, not
+commented out, not as a TODO.
+
+Audited against the rendered HTML of all six pages:
+
+```
+12,400: 0   12400: 0   47 countries: 0   98%: 0   feel lighter: 0
+Trusted by: 0   Mumbai,: 0   Toronto: 0   Bangalore: 0   Berlin: 0
+testimonial: 1   star: 1
+```
+
+Both non-zero hits are innocent and were checked individually. "testimonial"
+occurs once, on `/about`, in the sentence saying there are none: *"You will not
+find visitor counts, testimonials or satisfaction figures on this site, because
+there are none that would be true."* "star" is the substring in *"Start
+writing"* on the home hero.
+
+The `Promises` section replaces the testimonial block. Its five claims are all
+properties of the software as built and checkable against the code today.
+
+---
+
+## 5. Copy decisions
+
+- Home `h1` is **"Somewhere to put it down."** as approved.
+- No em-dash asides in body copy, no adjective triads, no landing-page verbs.
+- `/about` does not claim clinical outcomes. It says the site is not therapy,
+  not a substitute for it, and explicitly that *"We are not going to tell you it
+  will make you feel better. It might do nothing."*
+- `/crisis-resources` leads with numbers, not prose. The "not an emergency
+  service" statement sits **below** the numbers deliberately: it is necessary
+  and honest, but making someone in distress read a liability notice before
+  reaching a phone number is the wrong order.
+- `/community-guidelines` opens by stating that venting is unmoderated because
+  nothing is stored, which sets the scope and doubles as the clearest statement
+  of the privacy model.
+- `/privacy` carries the legal-review notice at the top, not the bottom, and
+  describes Phase 4 as a future change rather than pre-writing a policy for
+  accounts nobody can create.
+
+---
+
+## 6. Contact page — the one line to edit
+
+`/contact` is complete apart from the address. **Edit this line and nothing
+else:**
+
+```
+frontend/src/lib/contact.ts  line 20
+
+export const CONTACT_EMAIL = "REPLACE-ME@example.invalid";
+```
+
+Then set the line below it to `false`:
+
+```
+frontend/src/lib/contact.ts  line 24
+
+export const CONTACT_EMAIL_IS_PLACEHOLDER = true;   ->   false
+```
+
+The page, the `mailto:` and the displayed address all read from those two
+constants, and `/community-guidelines` and `/privacy` link to the same mailto.
+While the flag is `true`, `/contact` shows a visible notice saying no address is
+connected yet and the address renders struck through, so nobody emails a void
+and waits. The placeholder is `@example.invalid` rather than a plausible domain
+on purpose.
+
+---
+
+## 7. The two side checks
+
+### Grain — was marginal, now raised
+
+Measured rather than eyeballed. `fractalNoise` writes noise into alpha as well
+as RGB, so effective per-pixel alpha is about half the layer opacity:
+
+```
+opacity   darkest px   lightest px   luminance spread
+0.055     #F0EDE8      #F7F4EF        7 levels
+0.085     #EDEAE5      #F7F4F0       10 levels
+0.100     #EBE8E3      #F7F5F0       13 levels
+```
+
+Seven levels is above the ~2-level JND, so it was not invisible — but
+`baseFrequency: 0.9` produced ~1.1 CSS px features, which a 2x display averages
+away, so on the screens most people use it was close to nothing.
+
+Raised to **0.085** and **baseFrequency 0.65** as instructed, giving ~10 levels
+at ~1.5 CSS px. Confirmed in the emitted CSS. Still under the ~0.12 where it
+starts reading as screen noise rather than paper. **Not visually confirmed** —
+you are looking at it next.
+
+### "Support this space" — a paste artefact, as you suspected
+
+Confirmed present exactly once on every route tested, including 404s:
+
+```
+/ 200:1   /design-system 200:1   /crisis-resources 404:1
+/privacy 404:1   /definitely-missing 404:1
+```
+
+One occurrence in `Footer.tsx`, no conditional, footer mounted in the root
+layout. No change made.
+
+---
+
+## 8. Verification actually run
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | **PASS** — exit 0 |
+| `npm run lint` | **PASS** — exit 0 |
+| `npm run build` | **PASS** — 11/11 static pages, exit 0 |
+| `docker compose build frontend` | **PASS** — image built, exit 0 |
+| Six routes return 200 | **PASS** |
+| Exactly one `h1` per page | **PASS** — 1 on every page |
+| Heading order, no skips | **PASS** |
+| Unique title + description per page | **PASS** |
+| Fabricated social proof | **PASS** — zero |
+| Hex outside globals.css / icon.svg | **PASS** — none in `.ts`/`.tsx` |
+| Stale Vandrevala number in output | **PASS** — zero occurrences |
+| Crisis page: all 6 numbers + 112/102 | **PASS** |
+| Footer helplines on every page | **PASS** |
+| Grain values in emitted CSS | **PASS** — `opacity:.085`, `baseFrequency='0.65'` |
+
+Build output:
+
+```
+Route (app)                                 Size  First Load JS
+┌ ○ /                                      164 B         106 kB
+├ ○ /_not-found                            123 B         103 kB
+├ ○ /about                                 164 B         106 kB
+├ ○ /community-guidelines                  173 B         106 kB
+├ ○ /contact                               173 B         106 kB
+├ ○ /crisis-resources                      173 B         106 kB
+├ ○ /design-system                       4.51 kB         107 kB
+├ ○ /icon.svg                                0 B            0 B
+└ ○ /privacy                               173 B         106 kB
+```
+
+### Footer links — corrected claim
+
+You asked me to confirm no footer link 404s. **The four you assigned to this
+phase are fixed. Three other links in the footer and navbar still 404**, and I
+am not going to report that as a clean pass:
+
+```
+/                     200      /crisis-resources     200
+/about                200      /community-guidelines 200
+/contact              200      /privacy              200
+/vent                 404  <-- Phase 6
+/support              404  <-- Phase 8
+/login                404  <-- Phase 5 (navbar)
+```
+
+`/vent` is linked from the navbar, the footer Navigate column, the home hero,
+the closing action, `/about` and `/crisis-resources`. It is the most-linked
+route on the site and it is the product's whole point, so it is currently the
+most conspicuous dead link in the build. All three land on the branded 404 from
+Phase 2a, which carries the helplines.
+
+### NOT verified
+
+- **No browser. No visual check at any width.** 320 / 375 / 414 / 768 / 1024 /
+  1440 / 1920 all unconfirmed, as in Phase 2. The riskiest new layout is the
+  home hero's 7/5 grid at the `lg` boundary, where the oversized mark is
+  positioned with `translate-x-10` inside `overflow-hidden` — that is the most
+  likely place to see an unintended scrollbar or a clipped mark.
+- **The grain change is unseen.** Numbers moved as intended; whether 0.085 reads
+  as paper is yours to judge.
+- **Keyboard traversal, screen reader, Lighthouse, axe** — none run, unchanged
+  from Phase 2.
+- **`tel:` and `sms:` links have not been tested on a real handset.** They are
+  correctly formed, and `sms:741741` deliberately carries no prefilled body
+  because the syntax differs across iOS and Android.
+- **Nobody has called these numbers.** Verification means each one is published
+  by its operator on its own current site, not that a call was placed.
+- **The helpline hours have not been re-checked against public holidays** or any
+  seasonal variation the operators may run.
+
+---
+
+## 9. Broken, incomplete, or stubbed
+
+1. **`/vent`, `/support` and `/login` 404**, and `/vent` is linked from six
+   places. Phases 6, 8 and 5.
+2. **`/contact` has no working address.** Placeholder, visibly marked. §6 above
+   has the exact line.
+3. **`/design-system` is now unreachable by clicking.** The Phase 2 placeholder
+   home page held its only link and that page is gone. Still live at the URL,
+   still slated for deletion in Phase 9.
+4. **The privacy policy has not had legal review.** Stated at the top of the
+   page itself.
+5. **Helpline numbers need re-verification on a schedule.** `lib/helplines.ts`
+   records `verifiedFrom` per entry and the crisis page shows the check date.
+   Nothing enforces a re-check; this drifted once and will drift again.
+6. **`postcss` advisories unchanged** — 1 high, 1 moderate, transitive through
+   `next`, needs `next@16`.
+7. **No dark mode.** Unchanged.
+8. **`clay` at 4.14:1** still means the accent cannot be used for text. It came
+   up again here: every accent link on these pages uses `clay-deep`.
+
+---
+
+## 10. Open questions
+
+1. **`/vent` is the most-linked route on the site and it 404s.** Six links point
+   at it. Worth considering whether Phase 6 moves up, or whether it gets a
+   holding page sooner.
+2. **Contact address** — needed before any deploy.
+3. **Helpline re-verification cadence.** Monthly? Quarterly? A dated check in
+   `lib/helplines.ts` is only as good as the habit of returning to it.
+4. **`themeColor`** — still absent, unchanged from Phase 2.
+5. **AASRA and SNEHA are landlines.** Both are labelled as such. If you would
+   rather the page led with mobile-reachable numbers only, that is a content
+   call I would rather you made.
+

@@ -290,8 +290,16 @@
    * region is raised above it (`.app-layer`), so it is strictly behind content
    * and can never intercept a click or tint an interactive element.
    *
-   * Opacity is the whole game here. Above ~0.08 it reads as noise on a screen;
-   * at 0.055 it reads as paper.
+   * Tuned against measurement, since nobody had confirmed it was visible at
+   * all. fractalNoise writes noise into alpha as well as RGB, so the effective
+   * per-pixel alpha is about half the layer opacity. At the original 0.055
+   * that gave ~7 levels of 8-bit luminance spread on #F7F4EF: above the
+   * ~2-level JND but marginal, and baseFrequency 0.9 made features ~1.1 CSS px,
+   * which a 2x display averages away to almost nothing.
+   *
+   * 0.085 gives ~10 levels, and 0.65 gives ~1.5 CSS px features that survive
+   * at 2x DPR. Still under the ~0.12 where it starts reading as screen noise
+   * rather than paper.
    */
   body::before {
     content: "";
@@ -299,10 +307,10 @@
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    opacity: 0.055;
+    opacity: 0.085;
     background-repeat: repeat;
     background-size: 180px 180px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
   }
 
   /* Every real page region sits above the grain. */

@@ -1,37 +1,37 @@
-import Link from "next/link";
-import { API_BASE_URL } from "@/lib/api";
+import type { Metadata } from "next";
+import { Hero } from "@/components/sections/Hero";
+import { HowItWorks } from "@/components/sections/HowItWorks";
+import { Promises } from "@/components/sections/Promises";
+import { ClosingAction } from "@/components/sections/ClosingAction";
+
+export const metadata: Metadata = {
+  // The root layout appends " · HeadHeartFreeS" to every title. Home sets an
+  // absolute one so it does not read "HeadHeartFreeS · HeadHeartFreeS".
+  title: {
+    absolute: "HeadHeartFreeS — somewhere to put it down",
+  },
+  description:
+    "Write down what is weighing on you, then let it go. Your words never leave your browser. No account, no advice, no reply. Free.",
+};
 
 /*
- * Still a scaffold placeholder. The real home page — asymmetric hero and all —
- * is Phase 3; this exists so the layout, tokens and fonts have something to
- * render against, and so the design-system route is reachable without typing
- * the URL. It uses the primitives rather than inventing styles, so nothing here
- * has to be un-picked later.
+ * Home.
+ *
+ * The Phase 2 placeholder that stood here is gone in full, including the
+ * "API base URL" debug line. Nothing from it survives.
+ *
+ * One consequence worth knowing: that placeholder held the only link to
+ * /design-system. The preview route still exists and still works, but it is now
+ * reachable only by typing the URL. That is the right end state for an internal
+ * tool Phase 9 deletes, but it does mean it will not be stumbled upon.
  */
 export default function HomePage() {
   return (
-    <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6 lg:py-24">
-      <p className="font-sans text-overline font-semibold tracking-[0.085em] text-ink-soft uppercase">
-        Phase 2
-      </p>
-      <h1 className="mt-3 font-display text-h1 text-ink">The design system is in place.</h1>
-      <p className="mt-4 text-body-lg text-ink-soft">
-        Tokens, type scale, primitives, navigation and the grain overlay are built. The home
-        page itself lands in Phase 3.
-      </p>
-
-      <p className="mt-8 text-body-sm text-ink-soft">
-        <Link
-          href="/design-system"
-          className="rounded-sm underline decoration-clay underline-offset-4 hover:text-(--color-text-accent)"
-        >
-          View the component preview
-        </Link>
-      </p>
-
-      <p className="mt-10 text-caption text-ink-soft">
-        API base URL: <code className="font-mono">{API_BASE_URL}</code>
-      </p>
-    </div>
+    <>
+      <Hero />
+      <HowItWorks />
+      <Promises />
+      <ClosingAction />
+    </>
   );
 }

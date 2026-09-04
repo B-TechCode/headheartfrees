@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Logo } from "@/components/ui/Logo";
 import { focusRing } from "@/components/ui/styles";
+import { FOOTER_HELPLINES } from "@/lib/helplines";
 
 /**
  * PROJECT_BRIEF.md §7: Donate and Feedback are removed from the Navigate
@@ -20,29 +21,11 @@ const SUPPORT_LINKS = [
   { href: "/contact", label: "Contact Us" },
 ] as const;
 
-/**
- * Helplines, in the order someone in India would actually reach for them.
- *
- * Crisis Text Line wants an SMS rather than a call. A prefilled `sms:` body
- * behaves differently on iOS (`&body=`) and Android (`?body=`) and fails
- * silently on desktop, so the link is a plain `sms:` to the number and the
- * "text HOME to" instruction is carried as visible text instead.
+/*
+ * The footer strip renders a subset of lib/helplines.ts. It is not a second
+ * copy: that file is the single source of truth, and it exists because these
+ * numbers drifted once already.
  */
-const HELPLINES = [
-  { name: "iCall", action: "9152987821", href: "tel:9152987821", prefix: null },
-  {
-    name: "Vandrevala Foundation",
-    action: "1860-2662-345",
-    href: "tel:18602662345",
-    prefix: null,
-  },
-  {
-    name: "Crisis Text Line",
-    action: "741741",
-    href: "sms:741741",
-    prefix: "text HOME to",
-  },
-] as const;
 
 export function Footer() {
   return (
@@ -123,14 +106,14 @@ function CrisisStrip() {
         <span aria-hidden="true" className="block h-px w-10 bg-clay" />
 
         <h2 id="helplines-heading" className="mt-4 font-display text-h4 text-ink">
-          If you would rather talk to someone, these lines are open.
+          If you would rather talk to someone.
         </h2>
         <p className="mt-1 text-body-sm text-ink-soft">
-          Free, confidential, and staffed by people who do this every day.
+          Free and confidential. Hours are listed because not every line runs all night.
         </p>
 
         <ul className="mt-5 flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:gap-x-10 sm:gap-y-1">
-          {HELPLINES.map((line) => (
+          {FOOTER_HELPLINES.map((line) => (
             <li key={line.name}>
               <a
                 href={line.href}
@@ -158,12 +141,26 @@ function CrisisStrip() {
                     "group-hover:text-(--color-text-accent) group-hover:decoration-clay",
                   )}
                 >
-                  {line.action}
+                  {line.number}
                 </span>
+                <span className="text-caption text-ink-soft">{line.hours}</span>
               </a>
             </li>
           ))}
         </ul>
+
+        <p className="mt-4 text-body-sm text-ink-soft">
+          <Link
+            href="/crisis-resources"
+            className={cn(
+              "rounded-sm underline decoration-ink-faint underline-offset-4",
+              "hover:text-(--color-text-accent) hover:decoration-clay",
+              focusRing,
+            )}
+          >
+            More helplines, including outside India
+          </Link>
+        </p>
       </div>
     </section>
   );

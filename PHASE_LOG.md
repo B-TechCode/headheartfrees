@@ -983,3 +983,175 @@ site.
 | Screen-reader testing | **NOT RUN** |
 | iOS keyboard vs textarea | **NOT RUN** — needs a real device |
 | Lighthouse / axe | **NOT RUN** — Phase 9 |
+
+---
+
+# Phase 2a — Post-review fixes
+
+**Completed:** 2026-09-04
+**Scope:** three fixes raised after you reviewed the rendered Phase 2 output.
+
+---
+
+## 1. Status
+
+**All three done.** One of them did not need the fix you specified, and that is
+covered honestly below rather than reported as a silent pass.
+
+---
+
+## 2. Files
+
+```
+frontend/src/
+├── app/not-found.tsx            NEW. Branded 404 inside the root layout.
+└── components/ui/Spinner.tsx    MODIFIED. Track opacity 0.25 -> 0.35, stroke 2.5 -> 3.
+```
+
+No other file changed. No dependencies added.
+
+---
+
+## 3. What was done
+
+### Fix 1 — branded 404 page
+
+`app/not-found.tsx` at the app root, so Next renders it inside `app/layout.tsx`
+and it inherits the navbar, footer, fonts and grain automatically. That is what
+the default 404 was missing — it rendered outside the layout entirely, which is
+why an unmatched URL landed on unstyled black.
+
+- Heading in Fraunces (`font-display text-h1`), body in Karla.
+- Copy is in the product's voice: *"That page isn't here."* then *"The link may
+  be old, or the address slightly off. Either way it is not something you did
+  wrong."* followed by a line noting nothing written is affected, because it
+  never leaves the browser. Explicitly not "This page could not be found."
+- Two links: **Back to home** (clay) and **Go to the vent** (secondary).
+- Tokens only. The hex audit still reports zero hex values in any `.ts`/`.tsx`.
+
+One implementation note: the two actions are anchors carrying the Button token
+classes rather than `<Button>` elements. A `<button>` nested inside a `<Link>`
+is invalid HTML, so the classes are applied to the anchor directly. If a third
+place needs this, that is the point to give `Button` an `asChild`-style escape
+hatch rather than copy the classes a third time.
+
+### Fix 2 — Spinner contrast: **the stated condition did not fire**
+
+You asked me to check the clay Spinner as a graphic against the 3:1 threshold
+and darken it to `clay-deep` if it failed. Measured:
+
+```
+arc, clay on surface              4.14:1   PASS
+arc, clay-deep on surface         6.03:1   PASS
+arc, ink on surface              15.34:1   PASS
+```
+
+**Clay passes 3:1**, so no darkening was required. Worth adding: the
+design-system page had already been rendering `clay-deep` since the Phase 2
+contrast pass, so the swatch you reviewed was the 6.03:1 variant — darkening
+further was not available as a fix anyway.
+
+The faintness you saw is real, but it is the **track**, not the arc:
+
+```
+track @0.25 opacity, clay         1.37:1
+track @0.25 opacity, clay-deep    1.45:1
+track @0.25 opacity, ink          1.69:1
+```
+
+Faint in every colour, ink included, so changing the accent would have moved it
+from 1.37 to 1.45 and fixed nothing.
+
+The track is the unfilled part of the indicator — decorative under SC 1.4.11 in
+the same way the empty portion of a progress bar is, since the arc is the part
+required to understand the control. So this is a legibility change, not a
+conformance one: **track opacity 0.25 → 0.35, stroke 2.5 → 3** on both track and
+arc. That reads better at the 16px default without flattening the track/arc
+difference that creates the sense of rotation. The reasoning and the measured
+figures are recorded in the component's doc comment so this is not re-litigated
+later.
+
+If it still reads light to you on screen, the next lever is the stroke weight or
+the default size, not the colour — say so and I will take it further.
+
+### Fix 3 — dead Support routes now land on the branded 404
+
+Confirmed by request against a production server, checking status code plus
+three markers in the returned HTML:
+
+```
+/crisis-resources       HTTP 404 | branded-404-copy:1 | navbar:1 | footer-helplines:1
+/community-guidelines   HTTP 404 | branded-404-copy:1 | navbar:1 | footer-helplines:1
+/privacy                HTTP 404 | branded-404-copy:1 | navbar:1 | footer-helplines:1
+/contact                HTTP 404 | branded-404-copy:1 | navbar:1 | footer-helplines:1
+```
+
+Every other unrouted path behaves the same:
+
+```
+/vent /about /login /support /definitely-not-a-page   all HTTP 404, all branded
+```
+
+The status code is still a correct 404 — the page is branded, not faked into a
+200.
+
+**The part that matters most:** `footer-helplines:1` confirms `tel:9152987821`
+is present in the 404 response body. Someone who clicks "Crisis Resources" and
+hits a dead link still lands on a page carrying the actual helpline numbers.
+That does not make the dead link acceptable, but it does lower the cost of it
+considerably while those four pages remain unbuilt.
+
+---
+
+## 4. Verification actually run
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | **PASS** — exit 0 |
+| `npm run lint` | **PASS** — exit 0 |
+| `npm run build` | **PASS** — 6/6 static pages, exit 0 |
+| `docker compose build frontend` | **PASS** — image built, exit 0 |
+| Hex in `.ts`/`.tsx` | **PASS** — none |
+| 4 Support routes → branded 404 | **PASS** — 404 + navbar + footer + helplines on all four |
+| 5 further dead routes → branded 404 | **PASS** |
+| Spinner arc ≥ 3:1 as a graphic | **PASS** — 4.14:1 clay, 6.03:1 clay-deep |
+
+Build output:
+
+```
+Route (app)                                 Size  First Load JS
+┌ ○ /                                      165 B         106 kB
+├ ○ /_not-found                            123 B         103 kB
+├ ○ /design-system                       4.51 kB         107 kB
+└ ○ /icon.svg                                0 B            0 B
+```
+
+### NOT verified
+
+- **The 404 page has not been looked at in a browser.** Its structure and tokens
+  are confirmed in the rendered HTML, but the same visual gap from Phase 2
+  applies: no width has been eyeballed. The layout is a single narrow column, so
+  it is the lowest-risk page in the build, but that is reasoning, not observation.
+- **The Spinner change has not been seen rendered.** Whether 0.35 and a 3px
+  stroke actually resolve what you noticed is unconfirmed — the numbers moved in
+  the right direction, your eyes are the test.
+- Keyboard, screen-reader, Lighthouse: unchanged from Phase 2, still not run.
+
+---
+
+## 5. Still open
+
+Unchanged from the Phase 2 log except where noted:
+
+1. **The four Support pages are still unbuilt** and still unassigned to a phase.
+   The 404 they hit is now branded and carries the helplines, which was the
+   urgent part, but "Crisis Resources" remains a link that does not go to crisis
+   resources. Question 2 in the Phase 2 §10 still stands.
+2. **`clay` at 4.14:1** — still the supplied hex, still worked around by never
+   using clay as text. Phase 2 §10 question 3 still stands, and Fix 2 above is a
+   second data point: clay is fine for graphics, and the ceiling it imposes keeps
+   coming up.
+3. **`themeColor`** — still deliberately absent. Phase 2 §10 question 1.
+4. Visual verification at the seven breakpoints, keyboard traversal, screen
+   reader, iOS keyboard, Lighthouse — all still outstanding.
+

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none" role="img" aria-label="HeadHeartFreeS">
+  <!--
+    Compact exhale mark — the dot and two arcs only. The third arc of the full
+    logo turns to mud below 20px, which is most of a favicon's life.
+
+    Colour is carried by `color` on the root and read through currentColor, so
+    the one file answers both browser chromes: ink on light, bone on dark.
+    Clay was the other candidate and was rejected — at 16px against dark chrome
+    it reads muddy rather than warm.
+  -->
+  <style>
+    :root { color: #1A1D26; }
+    @media (prefers-color-scheme: dark) {
+      :root { color: #F7F4EF; }
+    }
+  </style>
+  <circle cx="10" cy="16" r="4" fill="currentColor" />
+  <path d="M17.5 9.5a9 9 0 0 1 0 13" stroke="currentColor" stroke-width="3"
+        stroke-linecap="round" />
+  <path d="M24 5a15 15 0 0 1 0 22" stroke="currentColor" stroke-width="2.25"
+        stroke-linecap="round" opacity="0.45" />
+</svg>

@@ -564,3 +564,422 @@ come from you.
 | Browser CORS round-trip | **NOT RUN** - no page calls the API yet |
 | 500 catch-all path | **NOT RUN** - see section 9 item 2 |
 | Responsive / a11y checks | **NOT RUN** - nothing designed yet |
+
+---
+---
+
+# Phase 2 — Design system
+
+**Completed:** 2026-09-04
+**Scope:** PROJECT_BRIEF.md §9 row 2 — CSS variables, Tailwind theme, typography
+scale, buttons, inputs, cards, navbar, footer, logo component, grain overlay.
+
+---
+
+## 1. Phase completed and current status
+
+**Done.** Every item in the Phase 2 scope exists and builds. All four required
+checks pass on the final code (§6).
+
+Two things that are complete but worth reading before Phase 3:
+
+1. **The supplied palette had a bug and its contrast figures were optimistic.**
+   Eight `@theme inline` entries were self-referential, and five of the six
+   documented contrast ratios overstated the real value — `clay` in particular
+   is 4.14:1, not the claimed 4.8:1, which means it **fails AA as a text
+   colour**. Both are fixed; details in §3 and §6.
+2. **Nothing has been looked at in a browser.** Layout is built mobile-first and
+   reasoned through, but no width from 320 to 1920 has been visually confirmed
+   in this session, by agreement. See §9.
+
+---
+
+## 2. Files
+
+```
+frontend/src/
+├── app/
+│   ├── icon.svg                     Compact exhale mark as favicon. Ink on light chrome,
+│   │                                bone on dark, via prefers-color-scheme inside the SVG.
+│   ├── layout.tsx                   MODIFIED. next/font wiring, skip link, Navbar + Footer,
+│   │                                flex column so the footer sits at the bottom on short pages.
+│   ├── page.tsx                     MODIFIED. Still a Phase 3 placeholder, now on real tokens.
+│   └── design-system/page.tsx       NEW. Internal preview of every primitive in every state.
+│                                    Client component so chip selection and loading are real.
+│                                    DELETE IN PHASE 9.
+├── components/
+│   ├── ui/
+│   │   ├── styles.ts                Shared focus ring, disabled treatment, tap-target constant.
+│   │   ├── Logo.tsx                 Logo + Wordmark. Opacity ramp baked in, never per-arc colour.
+│   │   ├── Button.tsx               4 variants x default/hover/active/focus/disabled/loading.
+│   │   ├── Input.tsx                Single-line field.
+│   │   ├── Textarea.tsx             Multi-line. field-sizing:content, looser leading. Phase 6 base.
+│   │   ├── Label.tsx                Marks fields optional rather than required.
+│   │   ├── FormField.tsx            Label + control + hint + error. Render prop hands the
+│   │   │                            control its id and aria-describedby so the wiring
+│   │   │                            cannot be forgotten.
+│   │   ├── Card.tsx                 raised / sunk / outline + Header, Title, Body. No shadows.
+│   │   ├── Chip.tsx                 Selectable, aria-pressed, optional icon slot (empty until Phase 6).
+│   │   ├── Badge.tsx                6 tones, text-on-wash rather than saturated fill.
+│   │   └── Spinner.tsx              aria-hidden; meaning carried by text or aria-busy.
+│   └── layout/
+│       ├── Navbar.tsx               Home/Vent/About + Sign in. Hand-rolled mobile disclosure.
+│       └── Footer.tsx               Crisis strip, brand blurb, Navigate, Support, donation line.
+├── lib/cn.ts                        Class joiner. No clsx, no tailwind-merge.
+└── styles/globals.css               REWRITTEN. All tokens, type scale, radii, grain, base layer.
+```
+
+**Deleted:** `palette-tokens.css` and `logo-exhale.svg` from the repo root, both
+consumed as instructed; `components/ui/.gitkeep` and `components/layout/.gitkeep`,
+now that those directories hold real files. `components/sections/.gitkeep`
+remains — that directory is still empty until Phase 3.
+
+---
+
+## 3. Key decisions and deviations
+
+Unlike the Phase 1 section, this is a record of decisions actually made in this
+session, not inference from code.
+
+### The supplied palette: two defects found and fixed
+
+**D7 — eight self-referential `@theme inline` entries.** `palette-tokens.css`
+declared `--color-surface: var(--color-surface)` and the same pattern for
+`surface-raised`, `surface-sunk`, `surface-inverse`, `success`, `warning`,
+`danger` and `info`. Tailwind emits `@theme` output where `@import "tailwindcss"`
+sits, and the hand-written `:root` block lands later, so the valid declaration
+won the cascade and the file worked — by accident. Moving the `:root` block above
+the import would have silently invalidated every surface and status colour.
+
+Fixed as approved: those eight now point at the raw layer (`var(--hhf-bone)`),
+which is order-independent. Every token name and both layers are otherwise
+exactly as supplied. Verified: zero self-referential declarations in the emitted
+CSS (§6).
+
+The same trap was avoided twice more while building — the `next/font` CSS
+variables are named `--font-fraunces` / `--font-karla` rather than
+`--font-sans` / `--font-display`, because the latter are the Tailwind theme keys
+and would have produced the identical bug.
+
+**D8 — the palette's contrast figures were overstated.** Measured against
+`#F7F4EF` with the WCAG relative-luminance formula:
+
+| token | claimed | measured | |
+|---|---|---|---|
+| ink | 14.9:1 | 15.34:1 | understated, harmless |
+| ink-soft | 9.1:1 | 9.30:1 | close |
+| ink-faint | 4.9:1 | **4.50:1** | overstated; lands a hair under AA |
+| clay | 4.8:1 | **4.14:1** | overstated; **fails AA as text** |
+| clay-deep | 6.9:1 | 6.03:1 | overstated but still passes |
+| white on clay | 4.6:1 | 4.54:1 | close, almost no margin |
+
+The raw hex values were **not** changed — they were supplied and are not mine to
+alter. What changed is how they are used, plus the comment block in
+`globals.css`, which now carries measured figures since the palette file is
+deleted and that comment is the only surviving record.
+
+### Consequent component decisions
+
+| # | Decision | Why |
+|---|---|---|
+| P1 | `clay` is never a text colour. Links and accent text use `clay-deep`. | 4.14:1 fails AA for text. `clay` is fine for fills, rules and the logo, which need 3:1. |
+| P2 | Control borders are `ink-faint` (4.50:1), not `rule-strong` (1.75:1). | SC 1.4.11 needs 3:1 for anything identifying a component. An input whose only boundary is a 1.75:1 hairline is not identifiable. |
+| P3 | `ink-faint` dropped as text on `surface`; small text is now `ink-soft`. | 4.4997:1 is under 4.5. It stays as placeholder text on `surface-raised` (4.82:1) and as a control border. |
+| P4 | Badge washes reduced from 8% to 4%. | At 8% the warning badge was 4.39:1. At 4% it is 4.60:1 and every other tone improves too. |
+| P5 | Crisis helpline underline is `ink-faint`, not `rule-strong`. | A 1.88:1 underline is enough for a decorative divider and not enough to advertise that a phone number is tappable. |
+| P6 | No `themeColor` in viewport metadata. | It would tint mobile browser chrome to match the page, but `<meta name="theme-color">` cannot read a CSS variable, so it means a second hardcoded copy of the background that drifts on the next palette change. Left off; a decision for you (§10). |
+| P7 | Grain sits at `z-index: 0` with a `.app-layer` class raising every region above it. | The brief requires it not sit above interactive elements. `pointer-events: none` alone would stop clicks but still tint controls. |
+| P8 | Type scale is fluid `clamp()` at deliberately off-grid sizes (17px, 15px, 13px). | §8 rules out a default vertical rhythm; a 14/16/18 scale is the giveaway. |
+| P9 | Radii are 2/3/5/9/14px. | §8 names uniform default radii as a toolkit tell. |
+| P10 | Exactly one shadow token, used only by the mobile menu. | As agreed: borders and surface tokens carry hierarchy. |
+
+### Approved in the plan and applied as agreed
+
+shadcn/ui not installed and the ten primitives hand-rolled (Radix deferred to
+Phase 5 for the avatar dropdown only); favicon uses a `prefers-color-scheme`
+swap rather than hardcoded clay; Chip ships icon-less with the slot present;
+Fraunces + Karla via `next/font/google`.
+
+---
+
+## 4. Versions
+
+No dependencies were added. The primitives are hand-rolled and `cn.ts` replaces
+what `clsx` + `tailwind-merge` would have done, so `package.json` is unchanged
+from Phase 1 — still Next 15.5.25, React 19.2.8, Tailwind 4.3.3, TypeScript
+5.9.3.
+
+Fonts are fetched by `next/font/google` at build time and self-hosted from
+`/_next/static/media/`. Verified: five `.woff2` files on disk after build, and no
+reference to `fonts.googleapis.com` or `fonts.gstatic.com` anywhere in the build
+output.
+
+- **Fraunces** — display and headings. Weights 400/600/700. Chosen for its true
+  optical-size axis and slight wonk, which reads as made-by-hand.
+- **Karla** — body and UI. Weights 400/500/600. A grotesque with genuinely odd
+  letterforms that stays quiet at 15–16px, avoiding the Inter voice §8 rules out.
+
+**Hermetic-build trade-off, for revisiting at Phase 9:** `next/font/google`
+needs network access during `docker compose build`. `npm ci` already imposes
+that, so it is not a new dependency, but it is a second one. During one local
+build Next logged `Retrying 1/3...` twice before succeeding — the fetch is not
+always first-time reliable. Switching to `next/font/local` with committed
+`.woff2` files would make builds fully offline-capable at the cost of binaries in
+the repo.
+
+---
+
+## 5. Deferred
+
+| Item | Phase |
+|---|---|
+| Radix (avatar dropdown only) | 5 |
+| Mood line icons for the Chip `icon` slot | 6 |
+| Home and About pages, asymmetric hero | 3 |
+| `lib/safety.ts` crisis keyword list | 6 |
+| Deleting `/design-system` | 9 |
+| Real pages behind the footer's Support links — Crisis Resources, Community Guidelines, Privacy Policy, Contact Us | unassigned; see §9 |
+| Lighthouse and automated a11y audit | 9 |
+
+---
+
+## 6. Verification actually run
+
+All four required commands, on the final code, in this session.
+
+### `npm run typecheck` — **PASSED**
+
+```
+> tsc --noEmit
+EXIT=0
+```
+
+### `npm run lint` — **PASSED**
+
+```
+> eslint .
+EXIT=0
+```
+
+### `npm run build` — **PASSED**
+
+```
+ ✓ Compiled successfully in 10.6s
+   Linting and checking validity of types ...
+ ✓ Generating static pages (6/6)
+
+Route (app)                                 Size  First Load JS
+┌ ○ /                                      162 B         106 kB
+├ ○ /_not-found                            993 B         104 kB
+├ ○ /design-system                       4.51 kB         107 kB
+└ ○ /icon.svg                                0 B            0 B
++ First Load JS shared by all             103 kB
+```
+
+### `docker compose build frontend` — **PASSED**
+
+```
+ Image headheartfrees-frontend Built
+EXIT=0
+```
+
+Rebuilt after the last source edit — an earlier passing build was discarded
+because it predated a change.
+
+### Emitted-CSS checks
+
+Run against the built stylesheet, because "it compiles" would not have caught
+the palette bug:
+
+```
+self-referential declarations found: 0
+
+--color-surface:var(--hhf-bone);
+--color-surface-raised:var(--hhf-bone-raised);
+--color-surface-sunk:var(--hhf-bone-sunk);
+--color-surface-inverse:var(--hhf-ink);
+--color-success:var(--hhf-success);
+
+--font-sans:var(--font-karla),ui-sans-serif,system-ui,-apple-system,sans-serif;
+--font-display:var(--font-fraunces),ui-serif,Georgia,"Times New Roman",serif;
+
+feTurbulence occurrences: 1
+```
+
+Each token now appears exactly once and resolves to the raw palette.
+
+### Contrast audit — **30 combinations, 0 failures**
+
+Computed from the hex values with the WCAG 2.x relative-luminance formula, over
+the combinations actually present in the code. The first run found **6
+failures**; all six are fixed and the re-run is clean. Selected results:
+
+```
+ink body on raised (cards, inputs, crisis strip)        16.45:1    4.5  PASS
+ink-soft on page (footer heads, captions, overlines)     9.30:1    4.5  PASS
+ink-faint placeholder on raised                          4.82:1    4.5  PASS
+clay-deep link on page                                   6.03:1    4.5  PASS
+white on clay (primary)                                  4.54:1    4.5  PASS
+warning on warning/4 wash                                4.60:1    4.5  PASS
+focus ring on page                                       6.27:1    3.0  PASS
+control border ink-faint on page                         4.50:1    3.0  PASS
+selected chip border clay on raised                      4.44:1    3.0  PASS
+--------------------------------------------------------------------------
+failures: 0
+```
+
+Two exclusions, both deliberate and stated rather than quietly dropped:
+
+- `disabled-text` on `disabled-surface` is 2.49:1. WCAG exempts disabled
+  controls, and a disabled control must read as unavailable.
+- `rule` (1.32:1) and `rule-strong` (1.75:1) are decorative separators. They are
+  no longer used as the boundary of any interactive control.
+
+### Render smoke test
+
+A production server was started locally on :3100 and the routes fetched:
+
+```
+/                HTTP 200   26894 bytes
+/design-system   HTTP 200   60882 bytes
+/icon.svg        HTTP 200   image/svg+xml
+```
+
+Rendered HTML confirms `tel:9152987821`, `tel:18602662345`, `sms:741741` and the
+helpline heading are present, and that the string `Donate` and `Feedback` appear
+nowhere in the navigation. Server stopped afterwards; port 3100 confirmed clear.
+
+### Hex audit
+
+```
+hex in .ts/.tsx:  NONE
+files containing hex:  src/app/icon.svg, src/styles/globals.css
+```
+
+`globals.css` is the token source. `icon.svg` is the one approved exception — a
+favicon cannot inherit `currentColor` from a page. Nothing else names a colour.
+
+### NOT verified — stated plainly
+
+- **No browser. No visual confirmation at any width.** 320 / 375 / 414 / 768 /
+  1024 / 1440 / 1920 have not been looked at. Layout is mobile-first with fluid
+  type and reasoned breakpoints, but "it renders correctly at 414px" is a claim
+  this session cannot make. By agreement — you are checking these in DevTools.
+- **iOS on-screen keyboard against the textarea.** Needs a real device; open.
+- **Keyboard traversal was not executed.** The markup is built for it — skip
+  link, `aria-expanded`/`aria-controls` on the menu toggle, Escape-to-close with
+  focus return, `focus-visible` rings everywhere, and a global `:focus-visible`
+  backstop — but no one has actually tabbed through it.
+- **Screen-reader testing.** None. `FormField`'s live region, `aria-pressed` on
+  Chip and `aria-busy` on Button are correct by construction, not by observation.
+- **The grain overlay has never been seen.** It is present in the CSS and
+  correct in structure; whether 0.055 opacity reads as paper rather than noise
+  is a judgement that needs eyes.
+- **Font rendering.** Fraunces and Karla are correctly wired and self-hosted;
+  how the pairing actually looks is unverified.
+- **Lighthouse / axe.** Not run. Phase 9.
+
+---
+
+## 7. How to run it
+
+Unchanged from Phase 1. The preview route is at **`/design-system`**, linked
+from the placeholder home page, and it renders every primitive in every state —
+the fastest way to review this phase.
+
+```bash
+cd frontend && npm run dev      # then open http://localhost:3000/design-system
+```
+
+---
+
+## 8. Environment variables
+
+None added. Phase 2 introduces no configuration.
+
+---
+
+## 9. Broken, incomplete, or stubbed
+
+1. **No visual verification at any breakpoint.** The largest gap in this phase.
+   Highest-risk spots, in order: the navbar between 768px and 1024px where the
+   wordmark, three links and Sign in first share a row; the footer's
+   `[2fr_1fr_1fr]` grid at its `lg` threshold; and the crisis strip's wrap
+   behaviour at 320px, where three helplines must stack without cramping.
+2. **Footer Support links point at routes that do not exist.** `/crisis-resources`,
+   `/community-guidelines`, `/privacy` and `/contact` all 404 today, as do
+   `/vent`, `/about`, `/login` and `/support`. Expected mid-build, but the footer
+   currently offers a person in distress a "Crisis Resources" link that goes
+   nowhere. The helpline numbers themselves work, which is what matters most —
+   but this should not reach anything public-facing. Not assigned to a phase by
+   the brief; flagging it as needing one.
+3. **`prefers-reduced-motion` stops the spinner.** The global rule sets
+   `animation-duration: 0.01ms !important`, so `Spinner` renders as a static arc
+   for those users. Deliberate — the meaning is carried by `aria-busy` and the
+   visually-hidden label, not the movement — but it means a reduced-motion user
+   sees a button that dims and stops responding with no moving indicator.
+4. **`Textarea` relies on `field-sizing: content`,** which is not in every
+   browser in the Tailwind v4 floor. `min-h-36` and `rows` are the fallback, so
+   it degrades to a fixed box rather than breaking.
+5. **No dark mode.** The palette defines one light scheme. The favicon handles
+   both chromes; the page does not. Not in the brief.
+6. **`components/sections/` is still an empty `.gitkeep`.** Phase 3.
+7. **The `postcss` advisories from Phase 1 are unchanged** — 1 high, 1 moderate,
+   transitive through `next`, fix requires `next@16`. Untouched this phase.
+8. **`/design-system` ships in the production bundle.** 4.51 kB, not linked from
+   the navbar, but publicly reachable. Scheduled for deletion in Phase 9.
+9. **`.vscode/settings.json` still regenerates.** Unchanged from the Phase 1
+   note; harmless, gitignored.
+
+---
+
+## 10. What Phase 3 needs from Phase 2, and open questions
+
+**Available for Phase 3:** the full token set (colour, type, radii, one shadow),
+ten primitives, Navbar and Footer already mounted in the root layout, the grain
+layer, and `.app-layer` for any new full-width region.
+
+Phase 3 should not need to define a single colour or font size. If it does, the
+scale has a gap worth fixing in `globals.css` rather than patching at the call
+site.
+
+**Open questions for you:**
+
+1. **`themeColor`** (P6). Do you want mobile browser chrome tinted to the paper
+   background? It costs one hardcoded hex in `layout.tsx` that cannot reference
+   a token. I left it out; say the word and it is one line.
+2. **The four Support routes** (§9 item 2). Which phase owns Crisis Resources,
+   Community Guidelines, Privacy Policy and Contact Us? Crisis Resources in
+   particular reads as something that should not stay a dead link for six more
+   phases.
+3. **`clay` at 4.14:1.** I have kept the supplied hex and worked around it by
+   never using clay as text. The alternative is darkening `--hhf-clay` slightly
+   so it clears 4.5:1 and becomes usable for text. That is a change to a palette
+   you supplied, so I did not make it. Worth a decision before Phase 3 commits
+   to a visual language around it.
+4. **Wordmark at 320px.** "HeadHeartFreeS" in Fraunces at `text-h4` beside the
+   mark is the widest fixed element in the navbar. If it crowds the menu button
+   on the narrowest screens, the fix is either a smaller wordmark or mark-only
+   below `sm` — I would rather you look at it than guess.
+
+---
+
+## Phase 2 verification summary
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | **PASS** — exit 0 |
+| `npm run lint` | **PASS** — exit 0 |
+| `npm run build` | **PASS** — 6/6 static pages |
+| `docker compose build frontend` | **PASS** — image built |
+| Self-referential CSS tokens | **PASS** — 0 found, was 8 |
+| Contrast audit (30 combinations) | **PASS** — 0 failures, was 6 |
+| Hex outside globals.css | **PASS** — only the approved favicon |
+| Fonts self-hosted | **PASS** — no gstatic/googleapis reference |
+| Render smoke test | **PASS** — /, /design-system, /icon.svg all 200 |
+| Navbar excludes Donate/Feedback | **PASS** — absent from rendered HTML |
+| Visual check at 7 breakpoints | **NOT RUN** — no browser this session |
+| Keyboard traversal | **NOT RUN** — built for it, not executed |
+| Screen-reader testing | **NOT RUN** |
+| iOS keyboard vs textarea | **NOT RUN** — needs a real device |
+| Lighthouse / axe | **NOT RUN** — Phase 9 |

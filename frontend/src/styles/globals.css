@@ -1,44 +1,332 @@
 @import "tailwindcss";
 
 /*
- * Phase 1 placeholders only.
+ * HeadHeartFreeS — design tokens.
  *
- * The real palette, type scale, grain overlay and spacing rhythm are phase 2's
- * job (PROJECT_BRIEF.md section 8). What matters here is the mechanism: every
- * colour is a CSS custom property declared in this file and exposed to Tailwind
- * through @theme, so swapping the supplied palette is a one-file change and no
- * component ever names a hex value.
+ * This file is the only place a colour, type size, radius or shadow is
+ * defined. No component names a hex value; components reference Tailwind
+ * utilities that resolve back to the tokens below.
+ *
+ * Layout of this file:
+ *   1. Ink & Clay palette   — as supplied, raw layer + semantic layer
+ *   2. Phase 2 additions    — type scale, radii, shadow, fonts, focus
+ *   3. Base layer           — element defaults, grain overlay, reduced motion
  */
 
+/* =========================================================================
+ * 1. Ink & Clay palette
+ * ========================================================================= */
+
 :root {
-  /* Neutral placeholders - deliberately plain, to be replaced wholesale. */
-  --hhf-paper: #fbfaf8;
-  --hhf-ink: #1c1a17;
-  --hhf-ink-muted: #6b6660;
-  --hhf-rule: #e5e1da;
-  --hhf-accent: #8a6a4f;
+  /* ---- Raw palette -------------------------------------------------- */
+
+  /* Surfaces — warm, low-chroma, closer to paper than to white. */
+  --hhf-bone:        #F7F4EF;   /* page background */
+  --hhf-bone-raised: #FFFCF7;   /* cards, inputs — lifts off the page */
+  --hhf-bone-sunk:   #EFEAE1;   /* wells, disabled fills */
+
+  /* Ink — near-black with a warm cast, never pure #000. */
+  --hhf-ink:         #1A1D26;
+  --hhf-ink-soft:    #3E4149;   /* secondary text */
+  --hhf-ink-faint:   #6E7079;   /* captions, counters, placeholders */
+
+  /* Rules and edges. */
+  --hhf-rule:        #DDD6CA;
+  --hhf-rule-strong: #C3BAAA;
+
+  /* Clay — the single accent. Used sparingly and deliberately. */
+  --hhf-clay:        #B85C38;
+  --hhf-clay-deep:   #93472B;   /* hover */
+  --hhf-clay-dark:   #6F351F;   /* active/pressed */
+  --hhf-clay-tint:   #F3E4DC;   /* washes, selected chips */
+
+  /* Status. Muted to sit beside clay without shouting. */
+  --hhf-success:     #3F6B4E;
+  --hhf-warning:     #8A6512;
+  --hhf-danger:      #A33B2E;
+  --hhf-info:        #395A73;
+
+  /* Focus ring — deliberately not clay, so focus never reads as an error
+     or as a primary action. */
+  --hhf-focus:       #2F5D8A;
+
+  /* ---- Semantic roles ------------------------------------------------ */
+
+  --color-surface:            var(--hhf-bone);
+  --color-surface-raised:     var(--hhf-bone-raised);
+  --color-surface-sunk:       var(--hhf-bone-sunk);
+  --color-surface-inverse:    var(--hhf-ink);
+
+  --color-text:               var(--hhf-ink);
+  --color-text-soft:          var(--hhf-ink-soft);
+  --color-text-faint:         var(--hhf-ink-faint);
+  --color-text-inverse:       var(--hhf-bone);
+  --color-text-accent:        var(--hhf-clay-deep);
+
+  --color-border:             var(--hhf-rule);
+  --color-border-strong:      var(--hhf-rule-strong);
+  --color-border-focus:       var(--hhf-focus);
+
+  --color-accent:             var(--hhf-clay);
+  --color-accent-hover:       var(--hhf-clay-deep);
+  --color-accent-active:      var(--hhf-clay-dark);
+  --color-accent-wash:        var(--hhf-clay-tint);
+  --color-on-accent:          #FFFFFF;
+
+  --color-success:            var(--hhf-success);
+  --color-warning:            var(--hhf-warning);
+  --color-danger:             var(--hhf-danger);
+  --color-info:               var(--hhf-info);
+
+  /* Disabled — one pair, applied everywhere, so disabled states can't drift. */
+  --color-disabled-surface:   var(--hhf-bone-sunk);
+  --color-disabled-text:      #9A958C;
+  --color-disabled-border:    var(--hhf-rule);
 }
 
+/*
+ * Expose the semantic layer to Tailwind: bg-surface, text-ink-soft, border-rule…
+ *
+ * The eight `--color-surface*` / status entries point at the RAW layer rather
+ * than at the identically-named semantic variable. Writing
+ * `--color-surface: var(--color-surface)` here — as the supplied palette did —
+ * is a self-reference: Tailwind emits it into :root alongside the semantic
+ * declaration above, and the file only works because the semantic block happens
+ * to land later in the cascade. Reorder this file and every surface and status
+ * colour silently becomes invalid. Pointing at --hhf-* removes the ordering
+ * dependency entirely. Token names are unchanged.
+ */
 @theme inline {
-  --color-paper: var(--hhf-paper);
-  --color-ink: var(--hhf-ink);
-  --color-ink-muted: var(--hhf-ink-muted);
-  --color-rule: var(--hhf-rule);
-  --color-accent: var(--hhf-accent);
+  --color-surface:          var(--hhf-bone);
+  --color-surface-raised:   var(--hhf-bone-raised);
+  --color-surface-sunk:     var(--hhf-bone-sunk);
+  --color-surface-inverse:  var(--hhf-ink);
+
+  --color-ink:              var(--color-text);
+  --color-ink-soft:         var(--color-text-soft);
+  --color-ink-faint:        var(--color-text-faint);
+  --color-ink-inverse:      var(--color-text-inverse);
+
+  --color-rule:             var(--color-border);
+  --color-rule-strong:      var(--color-border-strong);
+
+  --color-clay:             var(--color-accent);
+  --color-clay-hover:       var(--color-accent-hover);
+  --color-clay-active:      var(--color-accent-active);
+  --color-clay-wash:        var(--color-accent-wash);
+  --color-on-clay:          var(--color-on-accent);
+
+  --color-success:          var(--hhf-success);
+  --color-warning:          var(--hhf-warning);
+  --color-danger:           var(--hhf-danger);
+  --color-info:             var(--hhf-info);
 }
+
+/*
+ * Contrast against #F7F4EF — MEASURED, not inherited.
+ *
+ * The figures shipped with the palette were optimistic by 0.4–0.9 across the
+ * ink-faint and clay families. These are computed from the hex values above
+ * using the WCAG 2.x relative-luminance formula:
+ *
+ *   ink          15.34:1   AAA body text
+ *   ink-soft      9.30:1   AAA
+ *   ink-faint     4.50:1   *** just under AA for normal text (needs 4.50) ***
+ *   clay          4.14:1   *** FAILS AA as text. Graphics only (needs 3.0) ***
+ *   clay-deep     6.03:1   AA everywhere, safe for links
+ *   white on clay 4.54:1   AA for button labels, with almost no margin
+ *
+ * Two consequences, both applied in the components:
+ *
+ * 1. `clay` is never a text colour. Links and accent text use `clay-deep`
+ *    (exposed as --color-text-accent). `clay` is for fills, rules and the
+ *    logo, all of which only need 3:1.
+ * 2. `ink-faint` is not used for text on `surface` or `surface-sunk`. It is
+ *    fine on `surface-raised` (4.82:1), which is where placeholders live, and
+ *    it is used as a control border (needs 3:1, SC 1.4.11). Small text that
+ *    was ink-faint is now ink-soft.
+ *
+ * `rule` (1.32:1) and `rule-strong` (1.75:1) are decorative separators only.
+ * They are deliberately NOT used as the boundary of an interactive control,
+ * because SC 1.4.11 requires 3:1 for anything that identifies a component.
+ *
+ * disabled-text is 2.49:1 and deliberately fails — a disabled control must
+ * read as unavailable. WCAG exempts disabled elements.
+ *
+ * Re-measure anything you change. The clay family sits on the AA line.
+ */
+
+/* =========================================================================
+ * 2. Phase 2 additions — type, radii, shadow, fonts, focus
+ * ========================================================================= */
+
+@theme inline {
+  /* ---- Fonts ---------------------------------------------------------
+   * --font-fraunces / --font-karla are injected by next/font in layout.tsx.
+   * They are deliberately named differently from the Tailwind theme keys
+   * below: `--font-sans: var(--font-sans)` would be the same self-reference
+   * bug documented in the palette block above.
+   */
+  --font-sans: var(--font-karla), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, "Times New Roman", serif;
+
+  /* ---- Type scale ----------------------------------------------------
+   * Fluid from 320px up. Sizes are deliberately off the 14/16/18 grid so the
+   * page does not inherit a default-editor rhythm. Serif carries display and
+   * headings; sans carries body and UI.
+   */
+  --text-display: clamp(2.5rem, 1.9rem + 3vw, 4rem);
+  --text-display--line-height: 1.05;
+  --text-display--letter-spacing: -0.021em;
+
+  --text-h1: clamp(2rem, 1.6rem + 2vw, 3rem);
+  --text-h1--line-height: 1.1;
+  --text-h1--letter-spacing: -0.018em;
+
+  --text-h2: clamp(1.5rem, 1.3rem + 1.1vw, 2.125rem);
+  --text-h2--line-height: 1.17;
+  --text-h2--letter-spacing: -0.014em;
+
+  --text-h3: clamp(1.25rem, 1.15rem + 0.5vw, 1.5rem);
+  --text-h3--line-height: 1.26;
+  --text-h3--letter-spacing: -0.009em;
+
+  --text-h4: 1.125rem;
+  --text-h4--line-height: 1.36;
+  --text-h4--letter-spacing: -0.006em;
+
+  --text-body-lg: 1.0625rem;   /* 17px */
+  --text-body-lg--line-height: 1.68;
+
+  --text-body: 1rem;
+  --text-body--line-height: 1.65;
+
+  --text-body-sm: 0.9375rem;   /* 15px */
+  --text-body-sm--line-height: 1.6;
+
+  --text-caption: 0.8125rem;   /* 13px */
+  --text-caption--line-height: 1.5;
+  --text-caption--letter-spacing: 0.006em;
+
+  --text-overline: 0.75rem;    /* 12px */
+  --text-overline--line-height: 1.4;
+  --text-overline--letter-spacing: 0.085em;
+
+  /* ---- Radii ---------------------------------------------------------
+   * Tight and slightly irregular. Uniform 8px everywhere is one of the
+   * default-toolkit tells PROJECT_BRIEF.md §8 rules out.
+   */
+  --radius-xs: 0.125rem;   /* 2px  */
+  --radius-sm: 0.1875rem;  /* 3px  */
+  --radius-md: 0.3125rem;  /* 5px  */
+  --radius-lg: 0.5625rem;  /* 9px  */
+  --radius-xl: 0.875rem;   /* 14px */
+
+  /* ---- Shadow --------------------------------------------------------
+   * Exactly one, warm-tinted, reserved for genuinely floating surfaces
+   * (the mobile menu). Cards use borders and surface tokens instead.
+   */
+  --shadow-lift: 0 1px 2px rgb(26 29 38 / 0.05), 0 12px 28px -8px rgb(26 29 38 / 0.14);
+
+  /* ---- Focus ---------------------------------------------------------
+   * Its own token so `outline-focus` reads as intent at every call site.
+   */
+  --color-focus: var(--color-border-focus);
+
+  /* Label colour for the destructive button. White on #A33B2E is 6.4:1.
+     Named separately from --color-on-accent so the two can diverge if the
+     danger colour is ever darkened. */
+  --color-on-danger: var(--color-on-accent);
+
+  /* Danger hover/active, mixed toward ink rather than applied as a brightness
+     filter — a filter would drag the label and the border along with the
+     background. The clay family ships its own hover/active; danger did not. */
+  --color-danger-hover: color-mix(in oklab, var(--hhf-danger) 88%, var(--hhf-ink));
+  --color-danger-active: color-mix(in oklab, var(--hhf-danger) 76%, var(--hhf-ink));
+}
+
+/* =========================================================================
+ * 3. Base layer
+ * ========================================================================= */
 
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
   }
 
   body {
-    background-color: var(--hhf-paper);
-    color: var(--hhf-ink);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: 1.65;
+    /* Karla has real optical differences between hinted and unhinted rendering;
+       antialiasing keeps it from going bold on dark-on-light. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* The page is one long column; grain is painted behind it (below). */
+    position: relative;
+    min-height: 100dvh;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    /* Fraunces carries an optical-size axis; let the browser use it. */
+    font-optical-sizing: auto;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /*
+   * Paper grain.
+   *
+   * Generated, not an image asset: an SVG feTurbulence desaturated to grey and
+   * tiled. It sits at z-index 0 with pointer-events disabled, and every page
+   * region is raised above it (`.app-layer`), so it is strictly behind content
+   * and can never intercept a click or tint an interactive element.
+   *
+   * Opacity is the whole game here. Above ~0.08 it reads as noise on a screen;
+   * at 0.055 it reads as paper.
+   */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.055;
+    background-repeat: repeat;
+    background-size: 180px 180px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  }
+
+  /* Every real page region sits above the grain. */
+  .app-layer {
+    position: relative;
+    z-index: 1;
+  }
+
+  /*
+   * One focus treatment, defined once. Components add `focus-visible:` colour
+   * and offset; this guarantees nothing is ever focusable without a ring, even
+   * if a component forgets.
+   */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
   }
 
   /* Honour the OS setting from the very first phase. */
   @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
     *,
     *::before,
     *::after {

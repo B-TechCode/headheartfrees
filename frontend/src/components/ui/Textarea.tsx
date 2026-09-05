@@ -1,8 +1,12 @@
-import type { TextareaHTMLAttributes } from "react";
+import type { ComponentProps } from "react";
 import { cn } from "@/lib/cn";
 import { disabledControl, focusRing } from "./styles";
 
-export type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement> & {
+// ComponentProps rather than TextareaHTMLAttributes: React 19 treats ref as an
+// ordinary prop on function components, and only ComponentProps includes it in
+// the type. The vent composer needs a ref to place the caret after inserting a
+// prompt starter.
+export type TextareaProps = ComponentProps<"textarea"> & {
   invalid?: boolean;
 };
 

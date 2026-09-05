@@ -1,6 +1,30 @@
 spring:
   application:
     name: headheartfrees-backend
+
+  # Phase 4 adds the first table, so the application now requires Postgres to
+  # start. Before this phase it booted with no database at all; that is no
+  # longer true, and `docker compose up` is the simplest way to run it.
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/headheartfrees}
+    username: ${SPRING_DATASOURCE_USERNAME:headheartfrees}
+    password: ${SPRING_DATASOURCE_PASSWORD:headheartfrees}
+
+  jpa:
+    # Flyway owns the schema. Hibernate only checks that its mapping matches
+    # what the migrations produced, and refuses to start if it does not.
+    hibernate:
+      ddl-auto: validate
+    # Sessions do not stay open into view rendering; this is a JSON API.
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
   jackson:
     default-property-inclusion: non_null
     serialization:
@@ -34,3 +58,9 @@ logging:
   level:
     root: INFO
     com.headheartfrees: INFO
+    # Rule 2.1: never turn these up in an environment that serves real people.
+    # DEBUG on the web layer logs request bodies, and while the vent endpoint's
+    # body is only ever a mood enum, the habit is what matters — the moment
+    # another endpoint carries something sensitive, this setting is what decides
+    # whether it lands in a log file.
+    org.springframework.web: INFO

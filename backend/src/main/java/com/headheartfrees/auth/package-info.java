@@ -10,6 +10,6 @@
  * <p>Authentication is always optional for venting. Nothing added here may make
  * {@code /vent} require an account (PROJECT_BRIEF.md section 2.2).
  *
- * <p>Implemented in phase 4. Empty by design until then.
+ * <p>Implemented in phase 5 (was phase 4; the vent flow was reordered ahead of it). Empty by design until then.
  */
 package com.headheartfrees.auth;

@@ -39,7 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-class GlobalExceptionHandlerTest {
+class GlobalExceptionHandlerTest extends com.headheartfrees.PostgresTestBase {
 
     @Autowired
     private MockMvc mockMvc;

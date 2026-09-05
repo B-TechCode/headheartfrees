@@ -140,7 +140,7 @@ GET    /api/v1/auth/me                (authenticated)
 GET    /oauth2/authorization/google    Google sign-in entry point
 
 POST   /api/v1/vent/release           { mood?: string }   → NO TEXT FIELD
-GET    /api/v1/vent/stats             → { totalReleases, countries }
+GET    /api/v1/vent/stats             → { totalReleases }
 
 POST   /api/v1/feedback               { rating, message, displayName?, location? }
 GET    /api/v1/feedback               → approved feedback, paginated, public
@@ -151,6 +151,14 @@ POST   /api/v1/donations/intent       { amountMinor, currency }
 
 Rate limits: 5/min on auth endpoints per IP, 3/hour on feedback per IP,
 30/min on vent release. Return `429` with a `Retry-After` header.
+
+> **`/vent/stats` corrected 2026-09-04.** This previously specified
+> `{ totalReleases, countries }`. A country breakdown requires geolocating the
+> caller's IP address, and rule 2.1 and the `vent_events` definition in section 5
+> both forbid retaining an IP at all. The field could not be built without
+> breaking the same brief that asked for it, so it is removed rather than left
+> specified. `totalReleases` is a real count and is the only figure this endpoint
+> returns.
 
 Every error response uses one consistent shape:
 `{ timestamp, status, code, message, path, fieldErrors? }`
@@ -210,6 +218,15 @@ Vandrevala Foundation 9999666555, iCall 9152987821 Mon-Sat 10am-8pm, Crisis Text
 text HOME to 741741). Do not block submission, do not send anything anywhere, do not
 use alarming language.
 
+> **The Hindi/Hinglish keyword set needs a native speaker's review.** The list in
+> `lib/safety.ts` covers English at reasonable precision. Its Hindi and Hinglish
+> entries are deliberately narrow — only unambiguous nouns and explicit
+> first-person intent — because transliteration varies between writers and
+> hyperbolic references to dying are more common in casual Hinglish than in
+> English. That set has not been validated by a Hindi speaker and must be before
+> launch. The list is a supplement and never a safety net: the footer helpline
+> strip renders on every page regardless of what any keyword matches.
+>
 > **Corrected 2026-09-04.** This section previously listed Vandrevala Foundation as
 > 1860-2662-345. That number does not appear on the foundation's own contact page,
 > free-counselling page or FAQ, all of which list only +91 9999 666 555. It was
@@ -260,12 +277,19 @@ Complete one phase, print a suggested commit message, then stop.
 | 1 | Scaffold | Repo layout, `pom.xml`, `.gitignore`, `.env.example`, both Dockerfiles, `docker-compose.yml`, `README.md`, health endpoint, Next.js app booting |
 | 2 | Design system | CSS variables, Tailwind theme, typography scale, buttons, inputs, cards, navbar, footer, logo component, grain overlay |
 | 3 | Static pages | Home, About, fully responsive across all breakpoints |
-| 4 | Auth backend | User entity, Flyway migration, register/login, JWT, refresh rotation, Google OAuth2, `/me`, rate limiting, tests |
-| 5 | Auth frontend | Login, register, Google button, session handling, avatar menu, protected routes, soft arrival prompt |
-| 6 | Vent flow | `/vent` page, mood chips, counter, crisis detection, release endpoint, `/vent/released` |
+| 4 | Vent flow | `/vent` page, mood chips, counter, crisis detection, release endpoint, `/vent/released` |
+| 5 | Auth backend | User entity, Flyway migration, register/login, JWT, refresh rotation, Google OAuth2, `/me`, rate limiting, tests |
+| 6 | Auth frontend | Login, register, Google button, session handling, avatar menu, protected routes, soft arrival prompt |
 | 7 | Feedback | Submission, public list, moderation endpoints, admin queue UI |
 | 8 | Donation | `/support` page, footer link, About section, donation intent endpoint |
 | 9 | Hardening | Security headers, CORS lockdown, OpenAPI docs, GitHub Actions, Lighthouse, a11y audit |
+
+> **Reordered 2026-09-04.** The vent flow was phase 6, behind two auth phases.
+> It is now phase 4 and auth moves to 5 and 6. `/vent` requires no account by
+> design (rule 2.2), it is linked from five places, and it is the product;
+> auth blocks none of it. One consequence: persistence (Spring Data JPA, the
+> PostgreSQL driver, Flyway) arrives in phase 4 rather than with auth, because
+> `vent_events` is now the first table the application needs.
 
 ---
 

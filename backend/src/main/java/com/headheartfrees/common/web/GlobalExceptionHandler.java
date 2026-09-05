@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -217,6 +218,31 @@ public class GlobalExceptionHandler {
                 "UNSUPPORTED_MEDIA_TYPE",
                 "This endpoint does not accept that content type.",
                 request.getRequestURI()));
+    }
+
+    // -- 429 --------------------------------------------------------------
+
+    /**
+     * Rate limit exceeded.
+     *
+     * <p>{@code Retry-After} is required by PROJECT_BRIEF.md section 6, and the
+     * frontend's {@code ApiError} already parses it. The value is also repeated
+     * in {@code fieldErrors} so a client that only reads the JSON body can still
+     * find it.
+     */
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleRateLimited(
+            RateLimitExceededException ex, HttpServletRequest request) {
+
+        long seconds = Math.max(1, ex.getRetryAfterSeconds());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(seconds))
+                .body(ApiErrorResponse.withFieldErrors(
+                        HttpStatus.TOO_MANY_REQUESTS.value(),
+                        "RATE_LIMITED",
+                        "Too many requests. Try again shortly.",
+                        request.getRequestURI(),
+                        Map.of("retryAfterSeconds", Long.toString(seconds))));
     }
 
     // -- 500 --------------------------------------------------------------

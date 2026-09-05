@@ -14,6 +14,9 @@
  *   <li>Nothing here may write request bodies to a log.</li>
  * </ul>
  *
- * <p>Implemented in phase 6. Empty by design until then.
+ * <p>Implemented in phase 4. These rules are no longer only documentation:
+ * {@code VentRuleArchitectureTest} fails the build if any type in this package
+ * declares a String field, and the {@code vent_events_mood_allowed} CHECK
+ * constraint stops the database accepting a mood outside {@link Mood}.
  */
 package com.headheartfrees.vent;

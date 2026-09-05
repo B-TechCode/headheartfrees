@@ -21,14 +21,19 @@
     <java.version>21</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <springdoc.version>2.9.0</springdoc.version>
+    <bucket4j.version>8.10.1</bucket4j.version>
+    <archunit.version>1.4.1</archunit.version>
   </properties>
 
   <dependencies>
     <!--
-      Phase 1 keeps the classpath deliberately small so `mvn spring-boot:run`
-      starts with no database and no external credentials. Persistence (JPA,
-      Postgres driver, Flyway), JWT (jjwt), rate limiting (Bucket4j) and the
-      OAuth2 client are each added in the phase that first uses them.
+      Phase 1 kept the classpath small so the app started with no database.
+      Phase 4 introduces the first table, so persistence arrives here: JPA, the
+      PostgreSQL driver and Flyway. This was originally scheduled with auth, and
+      moved forward when the vent flow was reordered ahead of it — vent_events is
+      now the first table the application needs.
+
+      Still deferred: jjwt and the OAuth2 client (phase 5, auth backend).
     -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -41,6 +46,36 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!--
+      Flyway needs its Postgres module as a separate artifact from 10.x onward;
+      flyway-core alone cannot resolve the postgresql:// dialect at runtime.
+    -->
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+    </dependency>
+
+    <!-- In-memory token buckets for per-IP rate limiting. No datastore. -->
+    <dependency>
+      <groupId>com.bucket4j</groupId>
+      <artifactId>bucket4j-core</artifactId>
+      <version>${bucket4j.version}</version>
     </dependency>
 
     <dependency>
@@ -59,6 +94,34 @@
       <artifactId>spring-security-test</artifactId>
       <scope>test</scope>
     </dependency>
+
+    <!-- Migrations run against real Postgres in tests, not H2. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!--
+      Enforces PROJECT_BRIEF.md rule 2.1 as a build failure rather than a
+      comment. See VentRuleArchitectureTest.
+    -->
+    <dependency>
+      <groupId>com.tngtech.archunit</groupId>
+      <artifactId>archunit-junit5</artifactId>
+      <version>${archunit.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -66,6 +129,28 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <!--
+        Surefire's default includes do not match *IT.java, and without failsafe
+        nothing else does either, so `mvnw verify` was compiling the phase-4
+        integration tests and then never running them. Found during phase 4
+        verification: the suite reported 13 green tests and BUILD SUCCESS while
+        VentControllerIT, VentErrorHandlingIT and VentSchemaIT — including the
+        one assertion that vent_events has no content column — sat unexecuted.
+        A guard that does not run is worse than no guard, because it reads as
+        one in the log.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

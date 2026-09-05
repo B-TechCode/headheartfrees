@@ -12,14 +12,19 @@ press **Release & Let Go**, and the words are gone. No therapy, no advice, no AI
 
 ## Status
 
-Phase 1 of 9 — **scaffold**. Both applications build, boot and talk to each other;
-there is no product behaviour yet. The phase table lives in the brief (§9).
+Phase 4 of 9 — **the vent flow**. The product's central path works end to end:
+you can write, release, and the words are gone. The phase table lives in the
+brief (§9), which was reordered — the vent flow moved from 6 to 4 and auth moved
+back, because `/vent` needs no account and nothing was gated behind auth.
 
 | Phase | | |
 |---|---|---|
 | 1 | Scaffold | ✅ done |
-| 2 | Design system | next |
-| 3–9 | Static pages, auth, vent flow, feedback, donation, hardening | pending |
+| 2 | Design system | ✅ done |
+| 3 | Static pages | ✅ done |
+| 4 | Vent flow | ✅ done |
+| 5 | Auth backend | next |
+| 6–9 | Auth frontend, feedback, donation, hardening | pending |
 
 ## Stack
 
@@ -28,10 +33,13 @@ Maven, Spring Web, Spring Security 6, springdoc-openapi.
 
 **Frontend** — Next.js 15 (App Router), React 19, TypeScript strict, Tailwind CSS v4.
 
-Persistence (JPA, PostgreSQL driver, Flyway), JWT, Bucket4j rate limiting and the
-Google OAuth2 client are deliberately **not** on the classpath yet. Each is added in
-the phase that first uses it, so `mvn spring-boot:run` starts with no database and no
-credentials to configure.
+JWT and the Google OAuth2 client are deliberately **not** on the classpath yet.
+Persistence (JPA, PostgreSQL driver, Flyway) and Bucket4j arrived in phase 4. Each is added in
+the phase that first uses it.
+
+**As of phase 4 the backend requires Postgres to start.** `vent_events` is the
+first table, Flyway owns the schema, and Hibernate validates its mapping against
+it on boot. JWT (jjwt) and the Google OAuth2 client are still deferred to phase 5.
 
 ## Prerequisites
 
@@ -73,7 +81,17 @@ npm install
 npm run dev
 ```
 
-Postgres is not needed to run either application in phase 1.
+**Postgres is required for the backend from phase 4 onward.** The quickest way to
+get one is to start just the database from compose and leave the two applications
+running on the host:
+
+```bash
+docker compose up -d db
+```
+
+The datasource defaults in `application.yml` point at `localhost:5432` with the
+compose credentials, so nothing else needs configuring. The frontend still runs
+standalone against whatever `NEXT_PUBLIC_API_BASE_URL` points to.
 
 ## Layout
 
@@ -87,9 +105,9 @@ headheartfrees/
 │   └── src/main/java/com/headheartfrees/
 │       ├── common/       # shared DTOs, error handling, health endpoint
 │       ├── config/       # security, CORS, OpenAPI
-│       ├── auth/         # phase 4
+│       ├── auth/         # phase 5
 │       ├── feedback/     # phase 7
-│       ├── vent/         # phase 6 — counter only, never content
+│       ├── vent/         # phase 4 — counter only, never content
 │       └── donation/     # phase 8
 └── frontend/
     ├── Dockerfile        # 3 stages: deps → build → standalone runtime

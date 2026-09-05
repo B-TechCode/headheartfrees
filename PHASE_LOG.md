@@ -1628,3 +1628,301 @@ Unchanged from Phase 3 §10:
 4. **Helpline re-verification cadence** still undecided.
 5. **Privacy policy still needs legal review.**
 
+
+---
+
+# Phase 4 — Vent release path, persisted
+
+Verification completed 2026-09-05.
+
+## 1. Status
+
+The vent release path is implemented and now actually verified end to end:
+`POST /api/v1/vent/release` writes a row, `GET /api/v1/vent/stats` counts them,
+and `/vent` and `/vent/released` render against the running backend. The
+counter table holds a mood and a timestamp and nothing else.
+
+Two things in this section are not "the feature worked". One is an environment
+note about Docker, and one is a build defect found *by* the verification —
+the phase-4 integration tests had never executed. Both are below.
+
+---
+
+## 2. The Docker outage, and what it blocked
+
+Between the phase-4 implementation work and this verification, the Docker
+daemon on the development machine stopped serving requests. Testcontainers hung
+at `DockerClientFactory` rather than failing fast, so the backend suite did not
+error — it sat. A Windows restart fixed the daemon (`docker run --rm
+hello-world` succeeds, server 29.7.2).
+
+**What it blocked, for the duration:** everything in this phase that touches a
+real database. That is `mvnw verify` (every `@SpringBootTest` extends
+`PostgresTestBase`, so the whole suite needs a container, not just the vent
+tests), the Flyway-against-real-Postgres check, and `docker compose up`. During
+the outage the phase-4 code was written and reviewed but not once run against
+Postgres.
+
+### Environment note — `DOCKER_HOST`, not a code change
+
+Independent of the outage, Testcontainers probes the wrong pipe on this machine:
+
+```
+> docker context ls
+NAME              DOCKER ENDPOINT
+default           npipe:////./pipe/docker_engine
+desktop-linux *   npipe:////./pipe/dockerDesktopLinuxEngine
+```
+
+The active context is `desktop-linux`, but `DOCKER_HOST` is unset, so
+Testcontainers falls back to the `default` endpoint — `//./pipe/docker_engine` —
+which nothing is listening on. It waits rather than failing.
+
+Set it for the run only:
+
+```bash
+DOCKER_HOST='npipe:////./pipe/dockerDesktopLinuxEngine' ./mvnw verify
+```
+
+**This is deliberately not committed anywhere.** It is a property of one
+developer's Docker Desktop install, not of the project. Putting it in
+`pom.xml`, a `.mvn/jvm.config`, or a `~/.testcontainers.properties` checked into
+the repo would hard-code one machine's named pipe into a cross-platform build
+and break every Linux and macOS contributor. Recorded here so the next person
+who sees the hang has the two-minute answer instead of the two-hour one.
+
+---
+
+## 3. Defect found by the verification: the integration tests never ran
+
+The first clean `mvnw verify` reported:
+
+```
+[INFO] Tests run: 13, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+```
+
+Thirteen tests, all green. But the suite contains sixteen more, and the three
+`*IT` classes were not among the thirteen:
+
+| Class | In the 13? |
+|---|---|
+| `GlobalExceptionHandlerTest` (5) | yes |
+| `HealthControllerTest` (2) | yes |
+| `MoodTest` (2) | yes |
+| `VentRuleArchitectureTest` (4) | yes |
+| `VentControllerIT` (9) | **no** |
+| `VentErrorHandlingIT` (1) | **no** |
+| `VentSchemaIT` (3) | **no** |
+
+Cause: surefire's default includes are `Test*.java`, `*Test.java`,
+`*Tests.java`, `*TestCase.java` — none of which match `*IT.java` — and the
+`build` section of `pom.xml` had only `spring-boot-maven-plugin` and
+`maven-compiler-plugin`. There was no failsafe plugin, so nothing picked the
+integration tests up. Maven compiled all three classes and then ran none of
+them, and reported BUILD SUCCESS.
+
+This is the worst shape a gap can take. `VentSchemaIT` is the test that asserts
+`vent_events` has no content column — the rule 2.1 guard on the database side.
+It was written, it was correct, it was passing when invoked by hand, and it was
+protecting nothing, because the build never called it. A guard that does not run
+still *reads* as a guard in the log.
+
+**Fix — the only code change in this verification pass:** added
+`maven-failsafe-plugin` to `pom.xml`, bound to `integration-test` and `verify`,
+with a comment recording why. No test or application code was touched. The
+three IT classes passed on the first invocation both before the pom change (run
+directly, to confirm the code was sound and only the wiring was missing) and
+after it.
+
+`mvnw verify` now runs 26 tests:
+
+```
+[INFO] Tests run: 13, ...  (surefire)
+[INFO] --- failsafe:3.5.6:integration-test ---
+[INFO] Tests run: 13, ...  (failsafe: 9 + 1 + 3)
+[INFO] BUILD SUCCESS
+```
+
+---
+
+## 4. Verification actually run
+
+| Check | Result |
+|---|---|
+| `mvnw verify` with `DOCKER_HOST` set | **PASS** — 26 tests, 0 failures, 0 errors, BUILD SUCCESS |
+| Testcontainers starts a real Postgres | **PASS** — postgres:16-alpine, reported version 16.15 |
+| Flyway applies `V1__create_vent_events.sql` | **PASS** — "Successfully applied 1 migration to schema public, now at version v1" |
+| Flyway is idempotent on a second context | **PASS** — "Schema public is up to date. No migration necessary." |
+| `vent_events` columns, via `VentSchemaIT` | **PASS** — `containsExactly("id", "mood", "created_at")` |
+| No forbidden column present | **PASS** — 17-name blocklist, none found |
+| CHECK constraint rejects a direct bad insert | **PASS** — `vent_events_mood_allowed` fires |
+| `docker compose up -d --build` | **PASS** — db, backend, frontend all reach healthy |
+| `GET /vent` | **PASS** — 200 |
+| `GET /vent/released` | **PASS** — 200 |
+| `POST /api/v1/vent/release` `{"mood":"HEAVY"}` | **PASS** — **204** |
+| `POST /api/v1/vent/release` `{}` | **PASS** — 204, mood optional |
+| Release increments the stats count | **PASS** — `{"totalReleases":0}` → two POSTs → `{"totalReleases":2}` |
+| Live schema in the compose database | **PASS** — 3 columns, verified by `psql`, not only by the test |
+| `docker compose down` | **PASS** — all three containers and the network removed |
+
+The POST returns **204, not 200**. That is correct and deliberate — there is no
+response body because there is nothing to return; the release is not
+acknowledged with content. Recorded because the phase-4 request asked for 200
+and a future reader should not "fix" the 204.
+
+Live schema as it exists in the running stack, not in a test fixture:
+
+```
+   Column   |           Type           | Nullable |            Default
+------------+--------------------------+----------+--------------------------------
+ id         | bigint                   | not null | nextval('vent_events_id_seq')
+ mood       | text                     |          |
+ created_at | timestamp with time zone | not null | now()
+Check constraints:
+    "vent_events_mood_allowed" CHECK (mood IS NULL OR (mood = ANY (...)))
+```
+
+And the two rows the smoke test produced — the whole of what a release retains:
+
+```
+ id | mood  |          created_at
+----+-------+-------------------------------
+  1 | HEAVY | 2026-09-05 15:46:52.36052+00
+  2 |       | 2026-09-05 15:46:52.472579+00
+```
+
+No content, no user, no IP. Row 2 is a release with no mood chip, which is why
+that column is empty rather than absent.
+
+---
+
+## 5. Crisis keyword list — measured, not asserted
+
+`frontend/src/lib/safety.ts`, 38 patterns, exercised through the real module
+(the harness strips the TypeScript annotations rather than copying the list, so
+what is measured is what ships).
+
+### Precision: 44/49 on ordinary vent language, 5 false positives
+
+| Phrase | Fires on |
+|---|---|
+| `i lost my dad to suicide` | `suicide` |
+| `i dont want to kill myself i just want it to stop` | `kill myself` |
+| `i used to want to die but not anymore` | `want to die` |
+| `i am not suicidal, i just needed to say this somewhere` | `suicidal` |
+| `i would never hurt myself` | `hurt myself` |
+
+Four of the five are negation and past tense. Substring matching has no notion
+of "not", "never", or "used to", and adding one is a much larger change than
+this list is meant to be. These four are the benign kind of false positive: the
+person writing them is not having a good day either, and a panel of helplines is
+not a harmful thing to put in front of them.
+
+**`i lost my dad to suicide` is the one that surprised me, and it is a
+different kind of error.** It is not a matcher limitation — it is the list
+contradicting its own stated rule. The module header says it matches
+"first-person statements of intent, never distress vocabulary", and gives
+`kill myself` in / `kill me` out as the worked example. But the bare nouns
+`suicide` and `overdose` are in the list, and a bare noun is exactly distress
+vocabulary. The consequence is that someone bereaved by suicide — writing about
+the worst thing that has happened to them, with no intent of their own — gets a
+crisis panel telling them to call a helpline. That is the specific
+credibility-spending failure the header is written to prevent, sitting inside
+the list the header describes.
+
+Not changed here, because it is a judgment call about a safety surface and not
+mine to make alone: dropping bare `suicide` would also drop `i thought about
+suicide`, which should match. The candidate fix is to replace the bare noun with
+first-person forms (`thought about suicide`, `considering suicide`, `suicide
+plan`) and let `suicidal` carry the adjective. **Flagged for the Hindi review
+pass, which is already going to reopen this file.**
+
+### Recall: 100% against the list's own vocabulary, 0% against held-out paraphrase
+
+The first corpus scored 42/42, but that number is close to meaningless — I built
+those phrases from the list, so it measures that the regexes compile. A second
+corpus of 24 first-person intent phrases written *without* consulting the list:
+
+```
+held-out intent phrases: 24
+matched : 0
+MISSED  : 24   (held-out recall 0.000)
+```
+
+Nothing matched. Included in the misses: `im going to kms`, `i want to unalive
+myself`, `i want to stop existing`, `ive been counting my pills`, `i wrote a
+note for my mum`, `i have a plan and a date`, `life isnt worth living`,
+`im going to jump`.
+
+The module header already says "this list will miss things" and prioritises
+precision deliberately, so 0/24 is not a contradiction of the design. It is the
+size of the thing the header describes in words, and it belongs in the log as a
+number. The structural coverage — the helpline strip in the footer of every
+route including 404s — is doing the great majority of the work here. The keyword
+panel is a nudge on a narrow set of phrasings, and should never be described,
+internally or in copy, as detection.
+
+**Two misses are worth separating from the rest**, because they are mechanical
+rather than vocabulary gaps:
+
+- `i want to kill my self` and `ive been hurting my self again` — `my self`
+  spaced. `normalise()` collapses hyphens and underscores but not this. A person
+  typing fast hits it.
+- `thinking of jumping off the bridge` — the list has `jump off`, not `jumping
+  off`, though it does carry `killing myself` alongside `kill myself`. The
+  inflection coverage is inconsistent across entries.
+
+Both are cheap to fix and neither costs precision. Left alone in this pass under
+the no-new-code rule; they go in the same review as the `suicide` question.
+
+---
+
+## 6. Verified vs still unverified
+
+**Now verified, which was not before the outage lifted:**
+
+- The suite runs green against a real Postgres, and it is now the whole suite.
+- The migration applies to an empty schema, and is a no-op on an initialised one.
+- `vent_events` is exactly `id, mood, created_at` — asserted in `VentSchemaIT`
+  and confirmed independently in the running compose database.
+- The mood CHECK constraint rejects a direct out-of-enum insert.
+- The full three-container stack builds, starts, self-reports healthy, serves
+  both vent routes, records releases, counts them, and shuts down clean.
+
+**Still unverified:**
+
+- **`/vent` has not been used by a person.** Every check above is `curl` and
+  `psql`. Nobody has typed into the textarea, picked a mood chip, pressed the
+  button, or seen `/vent/released`. Whether the release *feels* like a release
+  is the actual acceptance criterion for this phase and it remains unmet.
+- **`CrisisPanel` has never been seen rendering.** Its trigger is unit-tested
+  through `containsCrisisLanguage`; the panel's own appearance, wording in
+  place, and whether it reads as help rather than alarm are unobserved.
+- **The Hinglish patterns still have no native-speaker review.** Unchanged from
+  when they were written, and §5 has now added the bare-`suicide` question to
+  that review's agenda.
+- **Rate limiting was verified at the unit level only** — `VentControllerIT`
+  covers the 31st-request 429, but no concurrent or multi-client test has run,
+  and the limiter is still in-memory and per-instance (phase 9).
+- **No load, soak, or restart-persistence testing.** The compose database uses a
+  named volume but nothing has confirmed the count survives a `down`/`up`
+  without `-v`.
+- Keyboard, screen reader, Lighthouse: still not run, unchanged since phase 2.
+
+---
+
+## 7. Still open
+
+Carried from phase 3a §5, with movement:
+
+1. **`/vent` no longer 404s.** Closed by this phase.
+2. **`/support` and `/login` still 404.** Phases 8 and 5.
+3. **Contact address is still a placeholder** — `lib/contact.ts` line 20, flag
+   on line 24.
+4. **Helpline re-verification cadence** still undecided.
+5. **Privacy policy still needs legal review** — and now has a concrete subject,
+   since the site began writing rows to a database.
+6. **New:** the safety-list review in §5 — bare `suicide`/`overdose`, the
+   `my self` spacing gap, inflection consistency, and the Hinglish set, as one
+   pass with a native speaker present.

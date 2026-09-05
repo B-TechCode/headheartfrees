@@ -1797,84 +1797,145 @@ that column is empty rather than absent.
 
 ---
 
-## 5. Crisis keyword list — measured, not asserted
+## 5. Crisis keyword list — measured, then fixed, then re-measured
 
-`frontend/src/lib/safety.ts`, 38 patterns, exercised through the real module
+`frontend/src/lib/safety.ts`, 53 patterns, exercised through the real module
 (the harness strips the TypeScript annotations rather than copying the list, so
 what is measured is what ships).
 
-### Precision: 44/49 on ordinary vent language, 5 false positives
+The list was measured, found to have a defect serious enough to fix in this
+pass, fixed, and re-measured. Both sets of numbers are below, because the
+before/after is the point.
+
+### Final numbers
+
+| | Before | After |
+|---|---|---|
+| Corpus size | 42 should-match / 49 should-not | 58 / 58 |
+| False negatives | 0 | **0** |
+| False positives | 5 | **5** |
+| Precision | 0.894 | **0.921** |
+| Held-out recall | 0/24 | **2/24** |
+| Patterns | 38 | **53** |
+
+### The defect: bare nouns handed a crisis panel to the bereaved
+
+The measured false positive that mattered was `i lost my dad to suicide`, firing
+on the bare noun `suicide`. Not a matcher limitation — the list contradicting
+its own stated rule. The module header says it matches "first-person statements
+of intent, never distress vocabulary", and gives `kill myself` in / `kill me`
+out as the worked example. A bare noun is exactly distress vocabulary. Bare
+`overdose` had the identical problem: `my brother died of an overdose`.
+
+The consequence was that someone bereaved by suicide — writing about the worst
+thing that has happened to them, with no intent of their own — got a crisis
+panel telling them to call a helpline. That is the specific credibility-spending
+failure the header is written to prevent, sitting inside the list the header
+describes.
+
+**This is closed.** Both bare nouns are gone, replaced by first-person
+constructions. All four bereavement probes now pass clean: `i lost my dad to
+suicide`, `my brother died of an overdose`, `we lost her to an overdose last
+year`, `my cousin took his own life`.
+
+### What the fix took, which was more than it first appeared
+
+Three changes were specified: rejoin `my self`, add inflections, drop the bare
+nouns. Applied literally they made precision **worse** — 10 false positives
+against the enlarged corpus, up from 5 — and introduced a new false negative.
+The first attempt at the first-person forms used the preposition alone:
+
+| New false positive | Fired on |
+|---|---|
+| `a talk about suicide prevention at work` | `about suicide` |
+| `a training about suicide awareness` | `about suicide` |
+| `an article about overdosing on caffeine` | `about overdosing` |
+| `that was a good jumping off point` | `jumping off` |
+| `we used the audit as a jumping off point` | `jumping off` |
+
+And `i thought about an overdose` — a real disclosure — stopped matching, because
+dropping the bare noun removed the only pattern that had covered it.
+
+One cause in all of them: **a preposition is not a first-person marker.** The
+carrier verb has to be inside the pattern. So `about suicide` became `thinking
+about suicide` / `thought about suicide` / `thinking of suicide` / `considering
+suicide`; `about overdosing` became the four `thinking|thought about
+overdosing|an overdose` forms, which also recovers the false negative; and
+`jumping off` was made to require an article.
+
+Bare `jump off` was tightened the same way, which was not asked for. It had the
+identical collision in the rarer `jump off point`, and leaving one half loose
+while tightening the other only invites the next person to re-loosen both.
+Recorded as a deliberate scope extension rather than buried.
+
+`normalise()` now rejoins `my self` into `myself` after the whitespace collapse.
+One rule covers `kill`, `hurt`, `cut`, `harm` and `hang`, which is why the list
+did not need a spaced variant of every entry.
+
+### The five remaining false positives
 
 | Phrase | Fires on |
 |---|---|
-| `i lost my dad to suicide` | `suicide` |
 | `i dont want to kill myself i just want it to stop` | `kill myself` |
 | `i used to want to die but not anymore` | `want to die` |
 | `i am not suicidal, i just needed to say this somewhere` | `suicidal` |
 | `i would never hurt myself` | `hurt myself` |
+| `im hanging myself out to dry here` | `hanging myself` |
 
-Four of the five are negation and past tense. Substring matching has no notion
-of "not", "never", or "used to", and adding one is a much larger change than
-this list is meant to be. These four are the benign kind of false positive: the
-person writing them is not having a good day either, and a panel of helplines is
-not a harmful thing to put in front of them.
+**The first four are negation and past tense, and they are not keyword work.**
+Substring matching has no notion of "not", "never", or "used to", and it cannot
+acquire one by adding, removing or reshaping entries — every phrase in that
+column is a phrase the list *should* contain. Closing them needs actual natural
+language processing: negation scope detection, at minimum, and realistically
+tense and modality with it. That is a different kind of component with a
+different failure mode, and it is not proposed here. They are also the benign
+direction of error: the person writing them is not having a good day either, and
+a panel of helplines is not a harmful thing to put in front of them. Left as
+they are, deliberately, and they should not be "fixed" by weakening the four
+patterns that catch them.
 
-**`i lost my dad to suicide` is the one that surprised me, and it is a
-different kind of error.** It is not a matcher limitation — it is the list
-contradicting its own stated rule. The module header says it matches
-"first-person statements of intent, never distress vocabulary", and gives
-`kill myself` in / `kill me` out as the worked example. But the bare nouns
-`suicide` and `overdose` are in the list, and a bare noun is exactly distress
-vocabulary. The consequence is that someone bereaved by suicide — writing about
-the worst thing that has happened to them, with no intent of their own — gets a
-crisis panel telling them to call a helpline. That is the specific
-credibility-spending failure the header is written to prevent, sitting inside
-the list the header describes.
+**The fifth was accepted knowingly.** Bare `hang myself` already collided with
+the same idiom, so `hanging myself` adds the more common inflection of a problem
+that predates it rather than a new one. The asymmetry runs opposite to the
+bereavement case: missing `ive been thinking about hanging myself` is far worse
+than showing a panel to someone using a workplace idiom, who is not a vulnerable
+person being mishandled. Approved as built.
 
-Not changed here, because it is a judgment call about a safety surface and not
-mine to make alone: dropping bare `suicide` would also drop `i thought about
-suicide`, which should match. The candidate fix is to replace the bare noun with
-first-person forms (`thought about suicide`, `considering suicide`, `suicide
-plan`) and let `suicidal` carry the adjective. **Flagged for the Hindi review
-pass, which is already going to reopen this file.**
+### Recall: 100% against the list's own vocabulary, 2/24 against held-out paraphrase
 
-### Recall: 100% against the list's own vocabulary, 0% against held-out paraphrase
-
-The first corpus scored 42/42, but that number is close to meaningless — I built
-those phrases from the list, so it measures that the regexes compile. A second
-corpus of 24 first-person intent phrases written *without* consulting the list:
+The main corpus scores 58/58, but that number is close to meaningless on its own
+— the phrases were built from the list, so it largely measures that the regexes
+compile. The honest number is a second corpus of 24 first-person intent phrases
+written *without* consulting the list:
 
 ```
 held-out intent phrases: 24
-matched : 0
-MISSED  : 24   (held-out recall 0.000)
+matched : 2
+MISSED  : 22   (held-out recall 0.083)
 ```
 
-Nothing matched. Included in the misses: `im going to kms`, `i want to unalive
-myself`, `i want to stop existing`, `ive been counting my pills`, `i wrote a
-note for my mum`, `i have a plan and a date`, `life isnt worth living`,
-`im going to jump`.
+Up from 0/24. The two now caught are `i want to kill my self` (the normalise
+rule) and `thinking of jumping off the bridge` (the inflection). Still missed:
+`im going to kms`, `i want to unalive myself`, `i want to stop existing`, `ive
+been counting my pills`, `i wrote a note for my mum`, `i have a plan and a
+date`, `life isnt worth living`, `im going to jump`.
 
-The module header already says "this list will miss things" and prioritises
-precision deliberately, so 0/24 is not a contradiction of the design. It is the
-size of the thing the header describes in words, and it belongs in the log as a
-number. The structural coverage — the helpline strip in the footer of every
-route including 404s — is doing the great majority of the work here. The keyword
-panel is a nudge on a narrow set of phrasings, and should never be described,
-internally or in copy, as detection.
+**This gap was deliberately not chased further.** The module header already says
+the list will miss things and prioritises precision, so 2/24 is not a
+contradiction of the design — it is the size of the thing the header describes
+in words, recorded as a number. Closing it properly needs real NLP, the same
+conclusion as the negation cases and for the same reason: the remaining misses
+are semantic, not lexical. The structural coverage — the helpline strip in the
+footer of every route including 404s — is doing the great majority of the work
+here. The keyword panel is a nudge on a narrow set of phrasings, and should
+never be described, internally or in copy, as detection.
 
-**Two misses are worth separating from the rest**, because they are mechanical
-rather than vocabulary gaps:
-
-- `i want to kill my self` and `ive been hurting my self again` — `my self`
-  spaced. `normalise()` collapses hyphens and underscores but not this. A person
-  typing fast hits it.
-- `thinking of jumping off the bridge` — the list has `jump off`, not `jumping
-  off`, though it does carry `killing myself` alongside `kill myself`. The
-  inflection coverage is inconsistent across entries.
-
-Both are cheap to fix and neither costs precision. Left alone in this pass under
-the no-new-code rule; they go in the same review as the `suicide` question.
+One held-out miss is worth naming because it is mechanical rather than semantic:
+`ive been hurting my self again`. The `my self` rule works and rejoins it
+correctly, but `hurting myself` is not a listed gerund, so it falls into the
+same inflection gap that `hanging myself` and `jumping off` were just added to
+close. Not fixed, since chasing inflections one probe at a time is how a
+precision-first list quietly becomes a recall-first one.
 
 ---
 
@@ -1900,8 +1961,11 @@ the no-new-code rule; they go in the same review as the `suicide` question.
   through `containsCrisisLanguage`; the panel's own appearance, wording in
   place, and whether it reads as help rather than alarm are unobserved.
 - **The Hinglish patterns still have no native-speaker review.** Unchanged from
-  when they were written, and §5 has now added the bare-`suicide` question to
-  that review's agenda.
+  when they were written — the §5 fixes were English-only and did not touch
+  them. The bare-`suicide` question that was on this review's agenda is now
+  closed, but it has been replaced by a narrower one: whether the first-person
+  carrier-verb rule that fixed the English nouns transfers to Hinglish, or
+  whether transliteration variance defeats it.
 - **Rate limiting was verified at the unit level only** — `VentControllerIT`
   covers the 31st-request 429, but no concurrent or multi-client test has run,
   and the limiter is still in-memory and per-instance (phase 9).
@@ -1923,6 +1987,27 @@ Carried from phase 3a §5, with movement:
 4. **Helpline re-verification cadence** still undecided.
 5. **Privacy policy still needs legal review** — and now has a concrete subject,
    since the site began writing rows to a database.
-6. **New:** the safety-list review in §5 — bare `suicide`/`overdose`, the
-   `my self` spacing gap, inflection consistency, and the Hinglish set, as one
-   pass with a native speaker present.
+6. **Safety list — partly closed in this pass.** Of the four items originally
+   raised in §5, three are done: the bare `suicide`/`overdose` nouns are gone
+   and the bereavement false positive with them, the `my self` spacing gap is
+   closed in `normalise()`, and the inflection coverage is now consistent
+   across `hang`, `jump` and the `…ing` forms. Precision went 0.894 → 0.921
+   with zero false negatives.
+
+   **Still open, and still needing a native speaker:** the Hinglish set. It was
+   not touched in this pass, and §5's fixes have now added a second question
+   for that same review — whether the first-person carrier-verb rule that
+   replaced the bare English nouns has a Hinglish equivalent, or whether
+   transliteration variance makes it unworkable there.
+
+7. **New — the four remaining false positives are not keyword work.**
+   `i dont want to kill myself…`, `i used to want to die but not anymore`,
+   `i am not suicidal…`, `i would never hurt myself`. Every one is negation or
+   past tense, and every phrase they fire on is a phrase the list *should*
+   contain, so no amount of adding, removing or reshaping entries reaches them.
+   Closing them needs real NLP — negation scope detection at minimum,
+   realistically tense and modality too — which is a different component with a
+   different failure mode and is not proposed. Recorded so that a future pass
+   does not mistake them for a list problem and weaken the four patterns that
+   catch them. The same conclusion applies to the 22 remaining held-out recall
+   misses, for the same reason: what is left is semantic, not lexical.

@@ -1,7 +1,9 @@
 package com.headheartfrees.config;
 
+import com.headheartfrees.auth.JwtAuthenticationFilter;
 import com.headheartfrees.common.web.SecurityErrorHandler;
 import java.util.List;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -9,7 +11,10 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -31,20 +36,48 @@ public class SecurityConfig {
     private static final String[] PUBLIC_PATHS = {
         "/api/v1/health",
         // Venting never requires an account (PROJECT_BRIEF.md section 2.2).
+        // Phase 5 introduced authentication and did not touch this line, which
+        // is the point: VentRemainsAnonymousIT fails the build if a credential
+        // ever becomes necessary here.
         "/api/v1/vent/**",
+        // Register, login and refresh must be reachable by someone with no
+        // token. /me is deliberately absent - it is the one auth endpoint that
+        // requires authentication.
+        "/api/v1/auth/register",
+        "/api/v1/auth/login",
+        "/api/v1/auth/refresh",
+        "/api/v1/auth/logout",
+        // Google sign-in entry and callback.
+        "/oauth2/**",
+        "/login/oauth2/**",
         "/v3/api-docs",
         "/v3/api-docs/**",
         "/swagger-ui.html",
         "/swagger-ui/**",
     };
 
+    /**
+     * @param clientRegistrations an {@link ObjectProvider} rather than a direct
+     *        dependency, because Spring only creates a
+     *        {@code ClientRegistrationRepository} when the Google properties are
+     *        actually set. Injecting it directly would make a missing
+     *        {@code GOOGLE_CLIENT_ID} a startup failure and take the whole
+     *        application down - including the password login that has nothing
+     *        to do with Google. {@code OAuth2AbsentConfigIT} asserts the context
+     *        starts with those properties absent.
+     */
     @Bean
     SecurityFilterChain securityFilterChain(
-            HttpSecurity http, SecurityErrorHandler securityErrorHandler) throws Exception {
+            HttpSecurity http,
+            SecurityErrorHandler securityErrorHandler,
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            ObjectProvider<ClientRegistrationRepository> clientRegistrations,
+            ObjectProvider<AuthenticationSuccessHandler> oauth2SuccessHandler)
+            throws Exception {
         // withDefaults() picks up the bean named `corsConfigurationSource` below.
         // Injecting CorsConfigurationSource directly is ambiguous: Spring MVC's
         // HandlerMappingIntrospector also implements that interface.
-        return http.cors(Customizer.withDefaults())
+        http.cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -55,12 +88,32 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(PUBLIC_PATHS).permitAll()
                         .anyRequest().authenticated())
+                // Reads the Bearer token and populates the context. Placed
+                // before the username/password filter, which is disabled but is
+                // still the conventional anchor point in the chain.
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 // Rejections here never reach @RestControllerAdvice, so they are
                 // rendered in the section 6 error shape by SecurityErrorHandler.
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(securityErrorHandler)
-                        .accessDeniedHandler(securityErrorHandler))
-                .build();
+                        .accessDeniedHandler(securityErrorHandler));
+
+        // Google sign-in, only when it is actually configured. getIfAvailable()
+        // returns null rather than throwing when no GOOGLE_CLIENT_ID is set, so
+        // an install without Google credentials starts normally and every other
+        // auth path keeps working.
+        ClientRegistrationRepository registrations = clientRegistrations.getIfAvailable();
+        if (registrations != null) {
+            AuthenticationSuccessHandler successHandler = oauth2SuccessHandler.getIfAvailable();
+            http.oauth2Login(oauth2 -> {
+                oauth2.clientRegistrationRepository(registrations);
+                if (successHandler != null) {
+                    oauth2.successHandler(successHandler);
+                }
+            });
+        }
+
+        return http.build();
     }
 
     @Bean

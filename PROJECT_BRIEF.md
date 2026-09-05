@@ -101,13 +101,34 @@ gateway in front, without rewriting business logic.
 
 ## 5. Data model
 
-Only three tables store anything. There is deliberately no table for vent content.
+Four tables store anything. There is deliberately no table for vent content.
+
+> **`refresh_tokens` added 2026-09-05 (phase 5).** This section previously said
+> three tables. Refresh-token rotation needs somewhere to record which tokens
+> have been spent, and rotation without that record is materially weaker than it
+> sounds: a stolen token used after the legitimate client has rotated simply
+> gets a fresh one issued and nobody is any the wiser. Keeping spent rows, and
+> grouping them by `family_id`, is what makes reuse detectable and lets a
+> detected theft revoke every token descended from that sign-in. The table
+> stores SHA-256 digests, never tokens.
 
 ```sql
 users
   id UUID PK, email CITEXT UNIQUE NOT NULL, password_hash TEXT NULL,
   google_id TEXT NULL UNIQUE, display_name TEXT, role TEXT DEFAULT 'USER',
   email_verified BOOLEAN DEFAULT false, created_at, updated_at
+  -- role is USER or ADMIN, CHECK-constrained. No endpoint writes it; the only
+  -- promotion is APP_ADMIN_BOOTSTRAP_EMAILS applied at startup to an account
+  -- that already exists.
+  -- CHECK (password_hash IS NOT NULL OR google_id IS NOT NULL)
+
+refresh_tokens
+  id UUID PK, user_id UUID NOT NULL FK -> users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE, family_id UUID NOT NULL,
+  expires_at, revoked_at NULL, created_at
+  -- SHA-256 digests only, never the tokens. Spent rows are KEPT: a presented
+  -- token that is found and already revoked means two parties hold tokens from
+  -- one login, so the whole family_id is revoked.
 
 feedback
   id UUID PK, user_id UUID NULL FK, display_name TEXT NULL, location TEXT NULL,

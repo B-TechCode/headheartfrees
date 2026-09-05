@@ -2,6 +2,7 @@ package com.headheartfrees.vent;
 
 import com.headheartfrees.common.web.ClientIpRateLimiter;
 import com.headheartfrees.common.web.RateLimitExceededException;
+import com.headheartfrees.common.web.RateLimitPolicy;
 import io.github.bucket4j.ConsumptionProbe;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -74,7 +75,7 @@ class VentController {
      * to retry sooner than a token actually exists.
      */
     private void enforceRateLimit(HttpServletRequest httpRequest) {
-        ConsumptionProbe probe = rateLimiter.tryConsume(httpRequest);
+        ConsumptionProbe probe = rateLimiter.tryConsume(httpRequest, RateLimitPolicy.RELEASE);
         if (!probe.isConsumed()) {
             long seconds = Duration.ofNanos(probe.getNanosToWaitForRefill()).toSeconds();
             throw new RateLimitExceededException(Math.max(1, seconds));

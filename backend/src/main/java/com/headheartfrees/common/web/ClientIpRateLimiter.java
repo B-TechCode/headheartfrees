@@ -7,7 +7,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,21 +44,25 @@ import org.springframework.stereotype.Component;
 @Component
 public class ClientIpRateLimiter {
 
-    /** PROJECT_BRIEF.md section 6: 30 releases per minute, per IP. */
-    private static final int RELEASE_CAPACITY = 30;
-    private static final Duration RELEASE_WINDOW = Duration.ofMinutes(1);
-
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
     /**
-     * Attempts to consume one token for the caller behind {@code request}.
+     * Attempts to consume one token for the caller behind {@code request},
+     * against the given policy.
+     *
+     * <p>The key is the policy name and the hashed address together, so each
+     * policy has its own bucket per caller. Phase 5 added the second policy;
+     * before it, this class hard-coded the release limit. Sharing one bucket
+     * across policies would mean failed sign-ins consuming a person's ability
+     * to vent, which rule 2.2 does not allow.
      *
      * @return the probe, carrying whether it succeeded and how long until a
      *         token is next available
      */
-    public ConsumptionProbe tryConsume(HttpServletRequest request) {
-        String key = hash(request.getRemoteAddr());
-        return buckets.computeIfAbsent(key, unused -> newBucket()).tryConsumeAndReturnRemaining(1);
+    public ConsumptionProbe tryConsume(HttpServletRequest request, RateLimitPolicy policy) {
+        String key = policy.name() + ':' + hash(request.getRemoteAddr());
+        return buckets.computeIfAbsent(key, unused -> newBucket(policy))
+                .tryConsumeAndReturnRemaining(1);
     }
 
     /** Visible for tests, which need a clean limiter between cases. */
@@ -67,11 +70,11 @@ public class ClientIpRateLimiter {
         buckets.clear();
     }
 
-    private static Bucket newBucket() {
+    private static Bucket newBucket(RateLimitPolicy policy) {
         return Bucket.builder()
                 .addLimit(Bandwidth.builder()
-                        .capacity(RELEASE_CAPACITY)
-                        .refillGreedy(RELEASE_CAPACITY, RELEASE_WINDOW)
+                        .capacity(policy.capacity())
+                        .refillGreedy(policy.capacity(), policy.window())
                         .build())
                 .build();
     }

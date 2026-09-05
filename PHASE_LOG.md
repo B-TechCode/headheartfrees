@@ -2011,3 +2011,479 @@ Carried from phase 3a §5, with movement:
    does not mistake them for a list problem and weaken the four patterns that
    catch them. The same conclusion applies to the 22 remaining held-out recall
    misses, for the same reason: what is left is semantic, not lexical.
+
+---
+
+# Phase 5 — Auth backend
+
+Completed 2026-09-05. Backend only; the login and register pages are phase 6.
+
+## 1. Status
+
+Registration, password login, JWT access tokens, refresh-token rotation with
+reuse detection, logout, `/me`, Google OAuth2, and 5/min rate limiting are all
+implemented and tested against real Postgres.
+
+The suite went from **26 tests to 106** (40 surefire, 66 failsafe), all passing.
+
+The constraint that governed the phase held: `/api/v1/vent/**` is still public,
+`vent_events` is unchanged, and there is now a test that fails the build if
+either stops being true.
+
+---
+
+## 2. The rule this phase was written around
+
+Three mechanisms, because a comment saying "do not authenticate the vent
+endpoints" is not one.
+
+**`/api/v1/vent/**` stayed in `PUBLIC_PATHS`.** That line was not edited. The
+diff on `SecurityConfig` adds paths; it removes none.
+
+**`ModuleBoundaryArchitectureTest`** — new, three rules. No class in `..vent..`
+may depend on `..auth..`; no class in `..auth..` may depend on `..vent..`; and a
+narrower third rule naming the specific mistake section 4 warns about, a
+cross-module JPA association. Both directions are separate tests so a failure
+says which way the boundary was crossed. The existing
+`VentRuleArchitectureTest` guards what a vent type may *contain*; this guards
+what the two modules may *see*.
+
+The reasoning is in the class comment and is worth repeating: rule 2.2 does not
+die by someone deciding to require login. It dies by degrees — an import, then
+an `Optional<UserId>` parameter "just for analytics", then a nullable column —
+and at no point does anyone believe they have changed the product. The first
+step is an import, so that is what fails.
+
+**`VentRemainsAnonymousIT`** — seven tests, none of which authenticate. Release
+and stats with no credentials; release with no body and no credentials; both
+with no account existing in the system at all; and release with a *forged*
+bearer token, which must be ignored rather than rejected, so a stale token in
+someone's browser cannot 401 them out of the one part of the site that is
+unconditionally available.
+
+Two of its tests go further than reachability. One signs in fully and then
+releases, and asserts that `vent_events` still has exactly `id, mood,
+created_at` — the runtime consequence of the schema rule, not just the schema.
+The other asserts the refresh cookie's `Path` is `/api/v1/auth`, so a browser
+never attaches it to a vent request. A cookie scoped to `/` would be an ambient
+identifier on every anonymous release.
+
+---
+
+## 3. Three bugs found by the tests, not by review
+
+All three passed code review in my own head and failed the moment they ran.
+Recorded because each is a plausible thing to reintroduce.
+
+### 3.1 CITEXT was silently case-*sensitive*
+
+`emailIsCaseInsensitive` failed with a 500. The column is `CITEXT` and the
+unique index is genuinely case-insensitive, but a Spring Data derived query
+`findByEmail(String)` is not: the JDBC driver sends the parameter typed as
+VARCHAR, and Postgres resolves `citext = varchar` by coercing the citext side
+*down* to `text` and comparing case-sensitively.
+
+The failure mode is nasty. The lookup says the address is free, the application
+inserts, and the unique index — which *is* case-insensitive — rejects it. A
+duplicate registration in different case became a 500 instead of the shared
+201, which is both a crash and an account-existence oracle.
+
+Fixed with a native query casting the parameter: `WHERE email = CAST(:email AS
+citext)`. That restores citext's own equality operator and still uses the unique
+index. `findByEmailIgnoreCase` would have been the other obvious fix and is
+worse — it generates `upper(email)` and cannot use the index at all.
+
+`@Column(columnDefinition = "citext")` was separately required on the entity, or
+Hibernate's `ddl-auto: validate` refuses to start the whole application,
+expecting `varchar(255)`.
+
+### 3.2 Reuse detection revoked the family and then rolled it back
+
+The one that would have mattered in production. `RefreshTokenService.rotate`
+detects a spent token, revokes every token in the family, and throws
+`RefreshTokenReuseException`. Both of those are inside `@Transactional`, so the
+throw marked the transaction rollback-only and **undid the revocation**. The
+caller got a clean 401 and the stolen family stayed live. Reuse detection was
+decorative.
+
+Fixed with `noRollbackFor = RefreshTokenReuseException.class` on both
+`RefreshTokenService.rotate` and `DefaultAuthService.refresh` — both, because
+with `REQUIRED` propagation they share one physical transaction and either
+marking it is enough to lose the write.
+
+`reuseRevokesTheFamily` fails if either annotation is removed. It is exactly the
+sort of annotation that looks like noise during a tidy-up.
+
+### 3.3 The Google-optional design failed at the first hurdle
+
+The plan said `client-id: ${GOOGLE_CLIENT_ID:}` in `application.yml` would leave
+the registration unconfigured. It does not. Spring Boot's
+`OAuth2ClientProperties.validate()` runs over every *declared* registration and
+throws `"Client id of registration 'google' must not be empty"`. So the empty
+default guaranteed the precise startup failure the requirement existed to
+prevent — no `GOOGLE_CLIENT_ID`, no application, password login down with it.
+
+The registration has to be genuinely absent, not present and empty, and YAML
+cannot express that. Added
+`GoogleOAuth2EnvironmentPostProcessor`, which injects the
+`spring.security.oauth2.client.registration.google.*` properties at startup only
+when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are non-blank. That also
+keeps the friendly variable names rather than making an operator set
+`SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_ID`.
+
+`OAuth2AbsentConfigIT` had to change too, for the same reason: blanking the
+properties with `@TestPropertySource` *declares* an empty registration and trips
+the same validation. It now removes the injected property source with a context
+initializer, which also keeps the test honest on a machine that has real Google
+credentials in its environment.
+
+---
+
+## 4. Decisions
+
+### Hashing — Argon2id, m=19456 t=2 p=1
+
+OWASP's first recommended Argon2id configuration, spelled out in
+`PasswordEncoderConfig` rather than inherited from
+`defaultsForSpringSecurity_v5_8()`, because a library default changing
+underneath stored password hashes is discovered late.
+
+**Why not BCrypt-12: BCrypt silently truncates at 72 bytes.** The policy allows
+64+ characters. 64 ASCII characters fit, so a quick reading says BCrypt is fine
+— but 64 characters of Devanagari is roughly 192 bytes, and everything past the
+72nd would be ignored, so two different long passphrases would hash
+identically with nothing reporting a problem. `PasswordPolicyTest` has a test
+named `multiByteIsNotTruncated` that exists solely to record this.
+
+Costs ~40-60ms per hash, which is the point on the login path and is why the
+suite is slower from this phase on.
+
+### Password policy
+
+Minimum 12. Maximum 200 — a bound on work per request, far above the 64 the
+brief required. No composition rules at all; there is a test,
+`noClassRequirements`, whose only job is to fail if someone adds one.
+
+Blocklist of ~110 common passwords, case-insensitive. Most entries are shorter
+than 12 and are already caught by the length rule — the ones that earn their
+place are the long entries, because a 25-character passphrase looks strong and
+is worthless if it is `correcthorsebatterystaple`. The test suite separates
+those two cases rather than pretending the blocklist catches the short ones.
+
+Rejects a password containing the email local part **or the display name**
+(case-insensitive, minimum 3 characters — "Jo" would otherwise reject any
+password containing "jo").
+
+### Registration — option A, always 201
+
+Duplicate and new registrations return the same status and byte-identical
+bodies. `duplicateDoesNotLeak` compares the two responses directly.
+
+The Argon2 hash runs on the duplicate path too, and is discarded. Skipping it
+would make the duplicate path tens of milliseconds faster, which is readable
+over a network and restores exactly the oracle the shared response removes. The
+same trick is used on login: an unknown address still pays for a hash.
+
+A duplicate registration also does not overwrite the existing password —
+`duplicateDoesNotOverwriteCredentials` exists because "register over an existing
+account" must not be an unauthenticated password reset.
+
+**Phase 6 requirement, recorded so it is not lost:** the registration success
+screen must read *"If that address is new, your account is ready. If you already
+had one, sign in instead"* with a link to `/login`. The string is
+`RegistrationResponse.SHARED_MESSAGE` and is already returned by the API. This
+is the agreed mitigation for the one real cost of option A — a returning user
+who has forgotten their account otherwise gets a success message and no way
+forward. Without a mail transport there is no better answer.
+
+### First admin
+
+`APP_ADMIN_BOOTSTRAP_EMAILS`, comma-separated, applied by `AdminBootstrap` at
+startup to accounts that **already exist**. Register → set the variable →
+restart. It never creates an account, so the variable is not a credential and
+leaking it grants nothing.
+
+`UserAccount`'s private constructor takes no role parameter and hardcodes
+`USER`, so no call site can create an admin — a stronger guarantee than
+remembering not to pass one. `RegisterRequest` has no role field. The single
+mutation that can produce an ADMIN is `assignRole`, called only from
+`AdminBootstrap`.
+
+Rejected: seeding an admin in a migration (a committed password hash), and any
+promote endpoint (a self-service path to ADMIN).
+
+### Rate limiting — the limiter did need generalising
+
+`ClientIpRateLimiter` hard-coded 30/min. It now takes a `RateLimitPolicy` enum
+(`RELEASE` 30/min, `AUTH` 5/min) and keys buckets on **policy + hashed IP**.
+
+Keying on both is not incidental. A shared bucket would let failed sign-ins
+consume someone's ability to vent, which rule 2.2 forbids. There is a test for
+it — `ventingSurvivesAnExhaustedAuthBucket` exhausts the auth limit and then
+releases successfully.
+
+AUTH covers register, login and refresh. Not logout (someone who cannot sign out
+because they signed in too often is the worse outcome) and not `/me`.
+
+### 401 vs 403 — the phase 2a item, closed
+
+`GlobalExceptionHandler.handleAccessDenied` now inspects the `SecurityContext`:
+null, unauthenticated, or `AnonymousAuthenticationToken` → 401; otherwise 403.
+
+Only the advice needed it. The filter chain was already correct —
+`ExceptionTranslationFilter` routes anonymous callers to the entry point (401)
+and authenticated ones to the access-denied handler (403). What reaches the
+advice is an `AccessDeniedException` thrown inside the dispatcher, by
+`@PreAuthorize`, where that routing has already happened.
+
+### Tokens and the cookie
+
+Access token: HS256, 15 minutes, response body only, carries `sub` (user id) and
+`role` and deliberately no email or display name — those change, and a stale
+name rendered in a UI is tedious to trace. `/me` is one query and always current.
+
+Refresh token: 32 bytes of `SecureRandom`, base64url, **cookie only**, 30 days.
+`HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/api/v1/auth`.
+
+Stored as SHA-256, not Argon2. It is looked up by value on every refresh so the
+transform must be deterministic, and that is safe here in a way it is not for a
+password: there is no dictionary to run against 256 bits of entropy. Both
+choices are in `RefreshTokenService`'s class comment so they do not read as
+inconsistent.
+
+**`SameSite=Strict` is correct only while frontend and backend share a
+registrable domain.** Port and subdomain do not affect same-site; a different
+registrable domain does. If they ever split, this must become `SameSite=None;
+Secure`. Recorded now rather than discovered in production.
+
+Own `JwtAuthenticationFilter` rather than `oauth2ResourceServer(jwt)`: the
+resource-server filter installs its own entry point and answers with the RFC
+6750 `WWW-Authenticate` form, which is not the section 6 error shape. Doing the
+decode ourselves keeps every rejection in the application routing through
+`SecurityErrorHandler`.
+
+### Module boundary
+
+Public from `auth`: `AuthService`, the DTOs, `UserRole`, and
+`JwtAuthenticationFilter`. Package-private: `UserAccount`, `RefreshToken`, both
+repositories, `DefaultAuthService`, `JwtService`, `RefreshTokenService`,
+`PasswordPolicy`, `AdminBootstrap`, `GoogleSignInHandler`, `AuthController`.
+
+`JwtAuthenticationFilter` is the one thing crossing the line, because
+`SecurityConfig` lives in `config` and must install it. It is module
+infrastructure, not an entity or repository, so section 4 is satisfied — but it
+is the exception and is flagged as such.
+
+Auth's exceptions are rendered by `AuthExceptionHandler` inside the `auth`
+package rather than by `GlobalExceptionHandler`, so `common.web` does not import
+this module's types. `InvalidCredentialsException` and
+`RefreshTokenReuseException` produce byte-identical responses.
+
+### Email verification
+
+Column exists, defaults false, nothing is gated on it, and `/me` reports it.
+
+For it to mean anything: a mail transport (none exists, and adding one brings
+deliverability, bounce handling and a provider dependency); a table of
+single-use signed verification tokens with expiry, which is a third auth table;
+a `GET /api/v1/auth/verify` endpoint; a resend path with its own rate limit; and
+a decision about *what* requires a verified address. That last is the real
+question and it is a product one — gating feedback submission is defensible,
+gating login is not, and gating anything about venting is forbidden by rule 2.2.
+
+---
+
+## 5. Verification actually run
+
+| Check | Result |
+|---|---|
+| `mvnw verify` | **PASS** — 106 tests, 0 failures, 0 errors |
+| Test count went **up**, not just green | **PASS** — 26 → 106 (surefire 13 → 40, failsafe 13 → 66) |
+| The new IT classes actually executed | **PASS** — all 8 named in the failsafe output |
+| Compiles under `-Xlint:all -Werror` | **PASS** — zero warnings |
+| Flyway V2 applies to real Postgres | **PASS** |
+| `citext` extension available | **PASS** — probed in `postgres:16-alpine` before it was designed in |
+| Argon2id actually in use | **PASS** — stored hash asserted to start `$argon2id$` |
+| ArchUnit boundary, both directions | **PASS** — 3 rules |
+| `/api/v1/vent/**` anonymous | **PASS** — 7 tests, none authenticated |
+| No auth response leaks a secret | **PASS** — 6 endpoints swept, incl. error bodies |
+| Context starts with no Google config | **PASS** |
+| `docker compose build` (all three) | **PASS** |
+| `docker compose up` — all three | **PASS** — db, backend, frontend all healthy |
+| `/`, `/vent`, `/vent/released`, `/about` through the stack | **PASS** — 200 |
+| Register → login → `/me` through the stack | **PASS** — 201, 200, 200 |
+| Google entry point with no credentials | **PASS** — 404, app otherwise fine |
+| Flyway V1 **and** V2 applied in the running stack | **PASS** |
+| `vent_events` still exactly 3 columns, live | **PASS** |
+| Vent release over HTTP with no auth | **PASS** — 204 |
+| Vent release over HTTP with a *forged* token | **PASS** — 204, token ignored |
+| Registration duplicate is byte-identical, live | **PASS** — `cmp` on the two bodies |
+| Login case-insensitive over HTTP | **PASS** — registered `Real@Example.com`, logged in as `REAL@example.com` |
+| Cookie attributes on the wire | **PASS** — `Path=/api/v1/auth; Max-Age=2592000; Secure; HttpOnly; SameSite=Strict` |
+| Rotation → reuse → whole family dead, live | **PASS** — verified in the database, see below |
+| Raw refresh token absent from storage | **PASS** — 0 rows match the issued value |
+
+### The reuse path, end to end over HTTP
+
+Not just asserted in a test. Against the running stack:
+
+```
+refresh #1 with token A   -> 200, new token B, body contains no token
+reuse    token A          -> 401
+use      token B          -> 401     <- the legitimate client, correctly locked out
+```
+
+And in the database afterwards, showing the blast radius is exactly one family:
+
+```
+ family_id                            | tokens | revoked
+--------------------------------------+--------+---------
+ 7a515e9d-...  (an earlier login)     |      1 |       0
+ 74d2ad1b-...  (the compromised one)  |      2 |       2
+```
+
+### The frontend container, and a false alarm worth recording
+
+On the first attempt `frontend` stayed in `Created` and failed to bind:
+
+```
+Error response from daemon: ports are not available: exposing port TCP
+0.0.0.0:3000 ... bind: Only one usage of each socket address ... is normally permitted.
+```
+
+A `node.exe` (PID 5020) on the host held port 3000 — a leftover dev server,
+unrelated to this phase. It was left running rather than killed. This was
+initially written up as "three-container bring-up not verified".
+
+**That entry was wrong and is corrected here.** The port later freed and the
+full stack came up healthy on all three containers, and everything above was
+then re-run against it: the four frontend routes, an anonymous vent release, and
+a complete register/login//me cycle. Recorded rather than quietly edited,
+because the sequence matters — a port conflict on the host looks exactly like a
+broken compose file for as long as it lasts, and the difference is only visible
+by retrying.
+
+The refresh cookie as observed through the full stack:
+
+```
+Set-Cookie: hhf_refresh=...; Path=/api/v1/auth; Max-Age=2592000;
+            Secure; HttpOnly; SameSite=Strict
+```
+
+`GET /oauth2/authorization/google` returns 404 with no credentials configured,
+which is the intended shape: the route is simply not mapped, rather than mapped
+and broken.
+
+### The leakage sweep
+
+`AuthResponseLeakageIT` checks six responses — login, register, refresh, `/me`,
+a failed login, an unauthenticated `/me` — against a list of forbidden
+substrings (`password_hash`, `token_hash`, `$argon2`, `refresh_token`,
+`google_id`, and casing variants), plus the actual stored hash and the actual
+issued refresh token pulled from the database and the cookie.
+
+It also locks the shape of both response records by reflection.
+`AccessTokenResponse` gaining a `refreshToken` component is the specific
+serialisation mistake that would put the token in a body, and it fails there
+rather than in review.
+
+---
+
+## 6. NOT verified
+
+- **Google sign-in has never been executed.** No credentials exist, so
+  `GoogleSignInHandler` — account linking, the verified-email check, the
+  redirect — has run zero times. What is tested is the *absence* case: the
+  context starts, and everything else works, without it. The handler itself is
+  unexercised code and should be treated as such until someone completes a real
+  sign-in.
+- **No frontend has called any of this.** Every test is MockMvc or curl. Cookie
+  behaviour in a real browser — `SameSite=Strict` on the actual cross-port XHR
+  from `localhost:3000`, whether `Secure` over plain HTTP behaves as expected —
+  is reasoned from the spec, not observed. The attributes on the wire are
+  confirmed; how a browser *acts* on them is not.
+- **No browser has loaded any of it.** The frontend routes return 200 and the
+  backend serves the whole auth cycle through the compose network, but that is
+  `curl` against both. `/vent` rendering correctly, and the cookie actually
+  being stored and replayed by a browser under `SameSite=Strict`, remain
+  unobserved — and the frontend has no auth code yet anyway, which is phase 6.
+- **Timing equalisation is argued, not measured.** The Argon2 hash runs on both
+  registration paths and on unknown-address login, which removes the large
+  difference. No statistical timing test was run, and smaller differences
+  certainly remain — a database lookup that misses is not free.
+- **The rate limiter is still per-instance and in-memory**, and still keyed on
+  `getRemoteAddr()` with `X-Forwarded-For` untrusted. Under `docker compose`
+  every request appears to come from the Docker gateway, so **all users share
+  one bucket** — meaning the 5/min auth limit is effectively global in the
+  compose deployment. Unchanged from phase 4 and still phase 9's problem, but it
+  matters more now that it guards login.
+- **`refresh_tokens` is never pruned.** One row per refresh, forever. Expired
+  and revoked rows accumulate. `idx_refresh_tokens_expires_at` exists to support
+  a cleanup job that does not exist.
+- **The JWT secret has a committed default.** `application.yml` falls back to a
+  base64 value that is in the repository, so an install that forgets
+  `APP_JWT_SECRET` starts successfully on a public secret. Deliberate for local
+  ergonomics; phase 9 should refuse to boot on it outside the `local` profile.
+- **No concurrency testing.** Two simultaneous refreshes with the same token
+  race on the reuse check. The unique index on `token_hash` prevents duplicate
+  rows, but which request wins and whether the loser's family is revoked is
+  unspecified and untested.
+- **Load, soak, and token-expiry-over-time** are untested. Nothing has waited 15
+  minutes to watch an access token actually expire; the TTL is asserted as a
+  number in the response.
+- **`@PreAuthorize` has no admin endpoint to guard yet.** The 401/403 fix is
+  tested through the filter chain, not through method security, because nothing
+  is annotated yet. Phase 7 brings the first one.
+
+---
+
+## 7. Environment variables introduced
+
+```
+APP_COOKIE_SECURE=true                  # false only for LAN-IP without TLS
+APP_ADMIN_BOOTSTRAP_EMAILS=             # comma-separated; promotes existing accounts only
+GOOGLE_CLIENT_ID=                       # optional
+GOOGLE_CLIENT_SECRET=                   # optional
+APP_OAUTH2_SUCCESS_REDIRECT=http://localhost:3000/auth/callback
+```
+
+`APP_JWT_SECRET`, `APP_JWT_ACCESS_TOKEN_TTL` and `APP_JWT_REFRESH_TOKEN_TTL`
+existed in `.env.example` since phase 1 and are now actually read.
+
+**Renamed:** `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` →
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`. The old names were phase-1
+placeholders nothing ever read; the new ones match the labels in the Google
+Cloud Console.
+
+### Getting Google credentials
+
+Google Cloud Console → APIs & Services → Credentials → Create credentials →
+OAuth client ID → **Web application**.
+
+- Authorised redirect URI: `http://localhost:8080/login/oauth2/code/google`
+- Authorised JavaScript origin: `http://localhost:3000`
+
+Both variables must be set or the registration is not created at all.
+
+---
+
+## 8. Still open
+
+Carried forward, with movement:
+
+1. **`/support` and `/login` still 404.** `/login` is phase 6, and the backend
+   it will call now exists.
+2. **Contact address is still a placeholder** — `lib/contact.ts` line 20.
+3. **Helpline re-verification cadence** still undecided.
+4. **Privacy policy still needs legal review**, and the subject has grown: the
+   site now stores email addresses, display names and password hashes.
+5. **Safety-list review** (phase 4 §5) — the Hinglish set still needs a native
+   speaker.
+6. **New — phase 6 must render the registration message from §4** alongside a
+   link to `/login`. This is the agreed mitigation for non-enumerating
+   registration and the API already returns the exact string.
+7. **New — Google sign-in is unexercised.** First real sign-in should be treated
+   as testing, not as usage.
+8. **New — refresh token pruning** has no job. Phase 9.
+9. **New — the committed JWT secret default** should stop being accepted outside
+   the `local` profile. Phase 9.

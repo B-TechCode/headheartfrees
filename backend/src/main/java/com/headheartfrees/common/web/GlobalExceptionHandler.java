@@ -12,7 +12,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -168,11 +171,47 @@ public class GlobalExceptionHandler {
             AccessDeniedException ex, HttpServletRequest request) {
 
         log.debug("Access denied on {} {}", request.getMethod(), request.getRequestURI(), ex);
+
+        // 401 for a caller with no identity, 403 for one who has an identity
+        // that is not enough. Phase 1 answered 403 unconditionally, which was
+        // invisible while no method security existed; @PreAuthorize arrives
+        // with the admin endpoints and makes it reachable, so it is fixed here.
+        //
+        // Only this advice needs the distinction. The filter chain already gets
+        // it right, because ExceptionTranslationFilter calls the entry point
+        // (401) for anonymous callers and the access-denied handler (403) only
+        // for authenticated ones. What reaches this method instead is an
+        // AccessDeniedException thrown inside the dispatcher, where that
+        // routing has already happened and cannot be consulted.
+        if (isAnonymous()) {
+            return respond(ApiErrorResponse.of(
+                    HttpStatus.UNAUTHORIZED.value(),
+                    "UNAUTHORIZED",
+                    "Authentication is required to access this resource.",
+                    request.getRequestURI()));
+        }
+
         return respond(ApiErrorResponse.of(
                 HttpStatus.FORBIDDEN.value(),
                 "FORBIDDEN",
                 "You do not have permission to access this resource.",
                 request.getRequestURI()));
+    }
+
+    /**
+     * True when nobody is authenticated on this request.
+     *
+     * <p>All three cases mean the same thing: no context, no authentication, or
+     * Spring's anonymous placeholder token. Checking only for {@code null}
+     * would miss the third, which is the common one whenever anonymous
+     * authentication is enabled.
+     */
+    private static boolean isAnonymous() {
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+        return authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken;
     }
 
     // -- 404 / 405 / 415 --------------------------------------------------

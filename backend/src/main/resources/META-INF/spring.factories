@@ -1,0 +1,12 @@
+# Registers GoogleOAuth2EnvironmentPostProcessor.
+#
+# This has to be spring.factories. Until 2026-09-06 the registration lived in
+# META-INF/spring/org.springframework.boot.env.EnvironmentPostProcessor.imports,
+# which looks right and does nothing: the "<fully-qualified-name>.imports" form
+# is read for AutoConfiguration only, and Spring Boot loads
+# EnvironmentPostProcessor implementations through spring.factories - as its own
+# spring-boot jar does for ConfigDataEnvironmentPostProcessor and the rest. The
+# post-processor was therefore never invoked anywhere: not under compose, not
+# from the jar, not in the test suite. Google sign-in could not work.
+org.springframework.boot.env.EnvironmentPostProcessor=\
+com.headheartfrees.config.GoogleOAuth2EnvironmentPostProcessor

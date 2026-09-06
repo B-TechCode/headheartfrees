@@ -38,8 +38,15 @@ import org.springframework.core.env.MapPropertySource;
  * is a misconfiguration that would fail later and less clearly, so it is
  * treated as "not configured" here.
  *
- * <p>Registered in
- * {@code META-INF/spring/org.springframework.boot.env.EnvironmentPostProcessor.imports}.
+ * <h2>How it is registered</h2>
+ *
+ * {@code META-INF/spring.factories}, under the
+ * {@code org.springframework.boot.env.EnvironmentPostProcessor} key, and it has
+ * to be that file. It was originally registered in
+ * {@code META-INF/spring/org.springframework.boot.env.EnvironmentPostProcessor.imports},
+ * which is the modern-looking form and is read for {@code AutoConfiguration}
+ * only - so nothing loaded this class, from phase 5 until 2026-09-06. Everything
+ * below describes behaviour that was correct and unreachable.
  */
 public class GoogleOAuth2EnvironmentPostProcessor implements EnvironmentPostProcessor {
 

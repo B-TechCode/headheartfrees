@@ -2593,3 +2593,134 @@ Two limits of this fix, stated rather than implied:
    `SPRING_PROFILES_ACTIVE=local` on a public server gets exactly what they
    asked for. The guard raises the floor from "silently insecure by default" to
    "insecure only on purpose"; it is not an authorisation boundary.
+
+---
+
+# Phase 5 defect found after the fact — the auth variables never reached the container
+
+**Date:** 2026-09-06
+**Kind:** Phase 5 defect, found after that phase was signed off. Two causes, one
+symptom.
+
+## 1. The symptom
+
+`docker compose exec backend env | grep GOOGLE` returned nothing, and
+`GET /oauth2/authorization/google` returned 404. Google sign-in had never been
+reachable through compose.
+
+## 2. First cause — the variables were never plumbed through compose
+
+`docker-compose.yml` lists the backend's environment explicitly, and phase 5
+added its variables to `.env.example` and to the application without adding them
+to that list. Everything phase 5 introduced was therefore inert under compose:
+
+| Variable | What compose was actually doing |
+| --- | --- |
+| `APP_JWT_SECRET` | ignored; backend ran on the committed default |
+| `APP_JWT_ACCESS_TOKEN_TTL` | ignored; 15m default |
+| `APP_JWT_REFRESH_TOKEN_TTL` | ignored; 30d default |
+| `APP_COOKIE_SECURE` | ignored; `true` default |
+| `APP_ADMIN_BOOTSTRAP_EMAILS` | ignored; no account could ever be promoted |
+| `GOOGLE_CLIENT_ID` / `_SECRET` | ignored; no Google registration |
+| `APP_OAUTH2_SUCCESS_REDIRECT` | ignored; default callback |
+
+`.env.example` documented all of them, the application read all of them, and
+nothing in between carried them. The phase-5 log's "environment variables
+introduced" section (§7) described a contract that only held for someone running
+the jar directly.
+
+The `APP_ADMIN_BOOTSTRAP_EMAILS` row is worth naming separately: the documented
+sequence for getting an ADMIN account — register, set the variable, restart — did
+nothing at all under compose, and the failure is silent, because the bootstrap
+promotes accounts that exist and says nothing when the list is empty.
+
+**Fixed** by adding all eight to the backend service. `APP_JWT_SECRET` uses the
+null form (`APP_JWT_SECRET:`) rather than `${APP_JWT_SECRET:-}`, because an unset
+variable interpolates to the empty string and an empty string is a *set* property
+to Spring: it would override the default in `application.yml` and the application
+would refuse to start with "app.auth.jwt-secret is not set". The null form passes
+a value through from `.env` or the shell and leaves the variable absent when there
+is none. Both behaviours were confirmed with a throwaway compose file before the
+real one was touched:
+
+```
+with .env:     NULLFORM_VAR=from-dotenv   EMPTYDEFAULT_VAR=from-dotenv
+without .env:  (NULLFORM_VAR absent)      EMPTYDEFAULT_VAR=
+```
+
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` default to empty, deliberately:
+blank means the registration is never created and the app starts with password
+login only, which is what `OAuth2AbsentConfigIT` pins.
+
+## 3. Second cause — the post-processor was registered in a file Spring never reads
+
+Adding the variables was necessary and not sufficient: with all of them present
+in the container, `/oauth2/authorization/google` still 404'd.
+
+`GoogleOAuth2EnvironmentPostProcessor` was registered in
+`META-INF/spring/org.springframework.boot.env.EnvironmentPostProcessor.imports`.
+That is the modern-looking form and it is read for `AutoConfiguration` only.
+Spring Boot loads `EnvironmentPostProcessor` implementations through
+`META-INF/spring.factories` — its own `spring-boot-3.5.16.jar` registers
+`ConfigDataEnvironmentPostProcessor` and the rest exactly that way.
+
+So the class had never been loaded. Not under compose, not from the jar, not in
+the test suite, not once since phase 5. The registration it exists to create was
+never created, and every line of its javadoc described behaviour that could not
+happen.
+
+**Fixed** by replacing the `.imports` file with `META-INF/spring.factories`.
+
+### Why the suite did not catch it
+
+`OAuth2AbsentConfigIT` was the only test touching any of this, and it asserts
+that no `ClientRegistrationRepository` bean exists. That was true — and it stayed
+true with credentials configured, for the wrong reason. A negative test with no
+positive counterpart passes for a class that is never loaded.
+
+`OAuth2ConfiguredIT` is the missing half: with `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` set as inlined test properties, the registration exists,
+`/oauth2/authorization/google` redirects to `accounts.google.com`, and the
+authorization URL requests `openid email profile` — the three scopes
+`GoogleSignInHandler` needs, which a default-scoped registration would not have
+requested and which would have failed at the callback rather than here. It uses a
+fake client id on purpose: Spring builds the URL without contacting Google, so a
+fake proves the plumbing exactly as well as a real credential and keeps the test
+independent of what a developer has exported.
+
+It was checked against the bug: with the `.imports` file restored, all three of
+its tests fail, the first with "empty here means
+GoogleOAuth2EnvironmentPostProcessor did not run".
+
+## 4. Verification actually run
+
+`./mvnw verify` — **69 tests, 0 failures** (66 before this change, plus the three
+new ones).
+
+Then against the real stack, `docker compose up -d --build backend`:
+
+| Check | Result |
+| --- | --- |
+| `docker compose exec backend env` | all eight variables present |
+| `GET /oauth2/authorization/google` | **302** to `https://accounts.google.com/o/oauth2/v2/auth`, with `scope=openid email profile` and `redirect_uri=http://localhost:8080/login/oauth2/code/google` |
+| `-e APP_JWT_SECRET=too-short` | refuses to start: "must decode to at least 256 bits for HS256; got 72 bits" — proof the variable now reaches the property rather than merely existing |
+| `GOOGLE_CLIENT_ID`/`_SECRET` forced empty | container healthy, `/oauth2/authorization/google` 404, `/api/v1/auth/me` 401 — the `OAuth2AbsentConfigIT` state, unchanged |
+
+The third row is the one that distinguishes "the variable is in the container"
+from "the application is using it". Presence in `env` proves only the former.
+
+## 5. Still open
+
+1. **Google sign-in past the redirect is still unexercised.** This closes the
+   404: the browser now reaches Google's consent screen. Nothing has completed a
+   round trip through `GoogleSignInHandler`, so phase 5 §6's "first real sign-in
+   should be treated as testing" still stands, and is now actually possible.
+2. **`APP_ADMIN_BOOTSTRAP_EMAILS` has never promoted an account under compose,**
+   because until today it never arrived. The mechanism is tested in isolation;
+   the documented register-set-restart sequence has still not been run
+   end to end.
+3. **No test asserts that `docker-compose.yml` carries what `.env.example`
+   documents.** Both files are edited by hand and this defect is precisely their
+   drifting apart. A check that every `APP_*`/`GOOGLE_*` key in `.env.example`
+   appears in the compose backend service would have caught it on the day it
+   landed.

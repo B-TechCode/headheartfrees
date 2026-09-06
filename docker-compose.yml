@@ -33,6 +33,30 @@ services:
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://db:5432/headheartfrees}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-headheartfrees}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-headheartfrees}
+      # Auth - phase 5. These were documented in .env.example and read by the
+      # application from the day the phase landed, but never listed here, so
+      # nothing running under compose could set them: the backend used
+      # application.yml's defaults whatever .env said, and Google sign-in was
+      # unreachable because the client id never reached the container.
+      #
+      # APP_JWT_SECRET is the null form on purpose, not ${APP_JWT_SECRET:-}.
+      # An unset variable interpolates to the empty string, and an empty string
+      # is a *set* property as far as Spring is concerned - it would override
+      # the default in application.yml and the application would refuse to
+      # start with "app.auth.jwt-secret is not set". The null form passes the
+      # value through from .env or the shell and leaves the variable absent
+      # when there is none, which is what keeps a fresh clone working.
+      APP_JWT_SECRET:
+      APP_JWT_ACCESS_TOKEN_TTL: ${APP_JWT_ACCESS_TOKEN_TTL:-PT15M}
+      APP_JWT_REFRESH_TOKEN_TTL: ${APP_JWT_REFRESH_TOKEN_TTL:-P30D}
+      APP_COOKIE_SECURE: ${APP_COOKIE_SECURE:-true}
+      APP_ADMIN_BOOTSTRAP_EMAILS: ${APP_ADMIN_BOOTSTRAP_EMAILS:-}
+      # Both must default to empty. Google is optional: blank means the
+      # registration is never created and the app starts with password login
+      # only, which is the state OAuth2AbsentConfigIT pins.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      APP_OAUTH2_SUCCESS_REDIRECT: ${APP_OAUTH2_SUCCESS_REDIRECT:-http://localhost:3000/auth/callback}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:

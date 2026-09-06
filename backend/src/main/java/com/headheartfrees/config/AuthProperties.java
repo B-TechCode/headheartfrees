@@ -11,10 +11,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>No default is a usable secret. {@code jwtSecret} has a development default
  * so the test suite and {@code docker compose up} work on a fresh clone, and
  * that default is long enough to satisfy HS256 - which means an install that
- * forgets to set {@code APP_JWT_SECRET} starts successfully with a secret that
- * is public knowledge. That is a deliberate trade for local ergonomics and it
- * is a production hazard; phase 9 should refuse to start on the default outside
- * the {@code local} profile.
+ * forgets to set {@code APP_JWT_SECRET} would start successfully with a secret
+ * that is public knowledge. {@link JwtSecretGuard} is what stops it: the
+ * default is kept, and accepted only under the {@code local} profile.
  *
  * @param jwtSecret            HS256 key. At least 256 bits once decoded.
  * @param accessTokenTtl       lifetime of the access token in the response body

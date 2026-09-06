@@ -59,9 +59,11 @@ app:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000}
   auth:
     # Development default so a fresh clone and the test suite both work. It is
-    # long enough for HS256, which means a deployment that forgets to set
-    # APP_JWT_SECRET starts successfully on a secret that is in the repository.
-    # Phase 9 should refuse to boot on this value outside the local profile.
+    # long enough for HS256, so nothing downstream rejects it — which is why an
+    # install that forgets APP_JWT_SECRET used to start happily on a secret that
+    # is public in this repository, and why JwtSecretGuard now refuses to start
+    # on this exact value unless the `local` profile is active. Change it here
+    # and JwtSecretGuardTest fails until the guard's copy is changed too.
     jwt-secret: ${APP_JWT_SECRET:ZGV2ZWxvcG1lbnQtb25seS1zZWNyZXQtbm90LWZvci1hbnl0aGluZy1yZWFsLTAxMjM0NTY3ODk=}
     access-token-ttl: ${APP_JWT_ACCESS_TOKEN_TTL:PT15M}
     refresh-token-ttl: ${APP_JWT_REFRESH_TOKEN_TTL:P30D}

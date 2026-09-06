@@ -1,5 +1,6 @@
 package com.headheartfrees;
 
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -21,7 +22,17 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * <p>Postgres 16 to match {@code docker-compose.yml}. Testing against a
  * different major version than production runs would undercut the point of
  * using a real database at all.
+ *
+ * <h2>Why the local profile</h2>
+ *
+ * {@code JwtSecretGuard} in the config package refuses to start on the
+ * committed {@code app.auth.jwt-secret} default outside the {@code local}
+ * profile, and the suite runs on exactly that default. Declaring the profile
+ * here says what a test run is - a local install - rather than handing every
+ * test class a secret of its own. It also means these tests exercise the
+ * guard's accepting branch on every run: if it were wrong, nothing would boot.
  */
+@ActiveProfiles("local")
 public abstract class PostgresTestBase {
 
     @SuppressWarnings("resource") // Reaped by Ryuk at JVM exit, not by us.

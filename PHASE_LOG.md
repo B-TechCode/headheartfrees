@@ -2485,5 +2485,111 @@ Carried forward, with movement:
 7. **New — Google sign-in is unexercised.** First real sign-in should be treated
    as testing, not as usage.
 8. **New — refresh token pruning** has no job. Phase 9.
-9. **New — the committed JWT secret default** should stop being accepted outside
-   the `local` profile. Phase 9.
+9. ~~**New — the committed JWT secret default** should stop being accepted
+   outside the `local` profile. Phase 9.~~ **Closed** — not in phase 9, in a
+   standalone fix immediately after this phase. See the section below.
+
+---
+
+# Security fix — the committed JWT secret is refused outside `local`
+
+**Date:** 2026-09-06
+**Closes:** Phase 5 §8 item 9. Nothing else in this change.
+
+## 1. What was wrong
+
+`application.yml` gave `app.auth.jwt-secret` a working default, and that default
+is in the repository. It is long enough for HS256, so nothing downstream
+objected: an install that never set `APP_JWT_SECRET` did not fail loudly, it
+started and signed tokens with a key that is public on GitHub.
+
+The consequence is not "weak crypto". Anyone who can read the source can mint a
+valid access token for any user id with `role` set to `ADMIN` — no password, no
+database, no request to the server, and nothing in a log to separate the forged
+token from a real one. Phase 5 recorded this as a deliberate trade for local
+ergonomics and deferred it to phase 9. It was worth pulling forward, because the
+window is "any deployment that happens before phase 9", and the person who makes
+that deployment is exactly the person who would not notice.
+
+## 2. The fix
+
+`config/JwtSecretGuard` — an `InitializingBean` that compares the bound value of
+`app.auth.jwt-secret` against the committed default and throws
+`IllegalStateException` unless the `local` profile is active. Startup message:
+
+```
+app.auth.jwt-secret is still the development default from application.yml, and
+the active profile is not 'local'. That default is committed to the repository,
+so anyone who can read the source can forge an access token for any account,
+including an ADMIN one. Set APP_JWT_SECRET to a secret of your own:
+openssl rand -base64 48
+```
+
+The default stays. A fresh clone still works, because `docker-compose.yml`
+already defaulted `SPRING_PROFILES_ACTIVE` to `local` — that was true before this
+change and is what made the profile the right signal to key on.
+
+Three decisions worth recording:
+
+- **Profile, not a "is this production" guess.** There is no reliable answer to
+  that question at startup. The profile is set deliberately by an operator, and
+  the failure direction is the safe one: an install with *no* profile set — the
+  same install that forgot `APP_JWT_SECRET` — is refused rather than trusted.
+- **The check is on the value, not on where it came from.** Copying the default
+  into `APP_JWT_SECRET`, an `.env` file or a secret manager gets the same
+  refusal. The secret is public wherever it is typed.
+- **The default is duplicated in Java**, because YAML cannot reference a
+  constant. That duplication is the failure mode this fix could have shipped
+  with: change the YAML default and the guard goes on comparing against a string
+  nothing uses, silently guarding nothing. `JwtSecretGuardTest` reads
+  `application.yml` off the classpath and asserts the two still match.
+
+`PostgresTestBase` now declares `@ActiveProfiles("local")`. The suite runs on the
+committed default, so this states what a test run is — a local install — instead
+of giving every test class a secret of its own. It also means every
+`@SpringBootTest` exercises the accepting branch: if the guard were wrong about
+it, nothing would boot.
+
+## 3. Verification actually run
+
+`./mvnw verify` — **66 tests, 0 failures**, including the 4 new ones. The IT logs
+show `The following 1 profile is active: "local"`, so the accepting branch is
+genuinely exercised rather than assumed.
+
+Unit tests alone would only prove the method throws, not that anything calls it,
+so all three cases were also run against the packaged jar and a real Postgres:
+
+| Profile | Secret | Result |
+| --- | --- | --- |
+| `prod` | committed default | **exit 1**, `BeanCreationException` carrying the message above |
+| `prod` | `openssl rand -base64 48` | exit 0, `Started HeadHeartFreesApplication` |
+| `local` | committed default | exit 0, `Started HeadHeartFreesApplication` |
+
+One thing the jar run showed that the unit test could not: the datasource and
+Flyway initialise *before* this bean, so on a host with an unreachable database
+the DB error is what appears first. The application does not start either way, so
+the secret is never in use, but the message is not always the first failure in
+the log.
+
+## 4. Also changed
+
+- `README.md` — the no-Docker path is now
+  `SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run`. Without the profile it
+  would now refuse to start, and a documented command that fails on a fresh
+  clone is its own bug.
+- `.env.example` and the comments in `application.yml` / `AuthProperties` — they
+  described the hazard and pointed at phase 9. They now describe the guard.
+
+## 5. Still open
+
+Phase 5 §8 stands otherwise, minus item 9. Nothing here touches items 1–8.
+
+Two limits of this fix, stated rather than implied:
+
+1. **It rejects one known string.** A deployment that sets `APP_JWT_SECRET` to
+   `password` passes. Entropy is not checked; `JwtService` still only enforces
+   the 256-bit length HS256 requires.
+2. **`local` is an honour system.** An operator who sets
+   `SPRING_PROFILES_ACTIVE=local` on a public server gets exactly what they
+   asked for. The guard raises the floor from "silently insecure by default" to
+   "insecure only on purpose"; it is not an authorisation boundary.

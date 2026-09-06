@@ -64,6 +64,12 @@ Every value has a local-development default, so this works on a fresh clone with
 - API health — http://localhost:8080/api/v1/health
 - Swagger UI — http://localhost:8080/swagger-ui.html
 
+`docker compose` sets `SPRING_PROFILES_ACTIVE=local` for you. That profile is what
+permits the development `app.auth.jwt-secret` default: the secret is committed, so
+the backend **refuses to start** on it under any other profile and tells you to run
+`openssl rand -base64 48` and set `APP_JWT_SECRET`. Anything that is not a
+developer's own machine therefore needs a real secret before it will boot.
+
 To override anything, `cp .env.example .env` and edit it. Note that
 `NEXT_PUBLIC_API_BASE_URL` is baked into the frontend bundle at **build** time — see
 [Environment](#environment) below.
@@ -73,7 +79,7 @@ To override anything, `cp .env.example .env` and edit it. Note that
 ```bash
 # Terminal 1 — backend on :8080
 cd backend
-./mvnw spring-boot:run
+SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
 
 # Terminal 2 — frontend on :3000
 cd frontend
@@ -127,7 +133,7 @@ entities. That is what makes any module liftable into its own service later.
 
 | | Backend (`backend/`) | Frontend (`frontend/`) |
 |---|---|---|
-| Run | `./mvnw spring-boot:run` | `npm run dev` |
+| Run | `SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run` | `npm run dev` |
 | Build | `./mvnw clean package` | `npm run build` |
 | Test | `./mvnw verify` | — (added with the first component) |
 | Types | — | `npm run typecheck` |

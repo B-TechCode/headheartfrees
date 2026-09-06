@@ -118,12 +118,32 @@ this is a single job.
 
 A wrong crisis number is worse than no crisis number.
 
-### 3.4 Google sign-in tested by a real person
+### 3.4 Google sign-in re-tested on the owner's own credentials
 
-The backend for Google sign-in is written and the "absent credentials" case is
-tested, but **no real Google sign-in has ever been completed**. Account linking,
-the verified-email check and the redirect have never executed. Treat the first
-real sign-in as testing.
+**A real Google sign-in has now been completed** (2026-09-06), which it never had
+been before that date. Google authenticated, the backend created the account,
+linked the Google id, issued the refresh cookie and redirected to
+`/auth/callback`; the account row exists with Google linked, and
+`APP_ADMIN_BOOTSTRAP_EMAILS` then promoted it to `ADMIN` on restart. So the path
+works, and the "treat the first sign-in as testing" warning has been served.
+
+Two reasons this stays on the pre-launch list:
+
+1. **It was the developer's OAuth client**, which only works on localhost and
+   which the developer deletes at handover (section 4). The owner's own client
+   under the owner's own Google account (section 2.2) is a different
+   registration with different redirect URIs, and a wrong redirect URI is the
+   usual way this breaks. Sign in once on the real domain after switching.
+2. **Three branches of the handler still have not run.** Linking Google to an
+   *existing password account* — register with a password first, then sign in
+   with Google using the same address — is the one worth testing deliberately,
+   because it is what stops one person ending up with two accounts. A second
+   sign-in with the same Google account, and the rejection of an unverified
+   Google address, are the other two.
+
+The redirect lands on `/auth/callback`, which 404s until the frontend for it
+exists. That page is Phase 6's; the 404 is the missing page, not a broken
+sign-in.
 
 ### 3.5 The remaining Phase 9 items
 

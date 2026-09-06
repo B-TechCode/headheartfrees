@@ -2391,12 +2391,17 @@ rather than in review.
 
 ## 6. NOT verified
 
-- **Google sign-in has never been executed.** No credentials exist, so
-  `GoogleSignInHandler` — account linking, the verified-email check, the
-  redirect — has run zero times. What is tested is the *absence* case: the
-  context starts, and everything else works, without it. The handler itself is
-  unexercised code and should be treated as such until someone completes a real
-  sign-in.
+- ~~**Google sign-in has never been executed.**~~ **Executed 2026-09-06.** A
+  real sign-in was completed once the two defects below were fixed: Google
+  authenticated, `GoogleSignInHandler` created the account and linked the Google
+  id, the refresh cookie was issued, and the browser was redirected to
+  `/auth/callback`. The account row exists with `has_google = t`, and
+  `APP_ADMIN_BOOTSTRAP_EMAILS` then promoted it to `ADMIN` on restart. The
+  create-and-link path is no longer unexercised code. Three branches of the
+  handler still are — linking to an existing *password* account, the
+  unverified-email rejection, and a returning sign-in — and the cookie was set
+  but never replayed, because the page that would replay it is phase 6. Full
+  record in "Google sign-in, executed end to end" at the end of this log.
 - **No frontend has called any of this.** Every test is MockMvc or curl. Cookie
   behaviour in a real browser — `SameSite=Strict` on the actual cross-port XHR
   from `localhost:3000`, whether `Secure` over plain HTTP behaves as expected —
@@ -2421,9 +2426,12 @@ rather than in review.
   and revoked rows accumulate. `idx_refresh_tokens_expires_at` exists to support
   a cleanup job that does not exist.
 - **The JWT secret has a committed default.** `application.yml` falls back to a
-  base64 value that is in the repository, so an install that forgets
-  `APP_JWT_SECRET` starts successfully on a public secret. Deliberate for local
-  ergonomics; phase 9 should refuse to boot on it outside the `local` profile.
+  base64 value that is in the repository. ~~An install that forgets
+  `APP_JWT_SECRET` starts successfully on a public secret; phase 9 should refuse
+  to boot on it outside the `local` profile.~~ **Closed 2026-09-06** —
+  `JwtSecretGuard` refuses to start on that value unless the `local` profile is
+  active. The default remains, which is what keeps a fresh clone and the suite
+  working.
 - **No concurrency testing.** Two simultaneous refreshes with the same token
   race on the reuse check. The unique index on `token_hash` prevents duplicate
   rows, but which request wins and whether the loser's family is revoked is
@@ -2482,8 +2490,9 @@ Carried forward, with movement:
 6. **New — phase 6 must render the registration message from §4** alongside a
    link to `/login`. This is the agreed mitigation for non-enumerating
    registration and the API already returns the exact string.
-7. **New — Google sign-in is unexercised.** First real sign-in should be treated
-   as testing, not as usage.
+7. ~~**New — Google sign-in is unexercised.** First real sign-in should be
+   treated as testing, not as usage.~~ **Closed 2026-09-06** — that first sign-in
+   has been done, and was treated as testing. See the end of this log.
 8. **New — refresh token pruning** has no job. Phase 9.
 9. ~~**New — the committed JWT secret default** should stop being accepted
    outside the `local` profile. Phase 9.~~ **Closed** — not in phase 9, in a
@@ -2711,16 +2720,79 @@ from "the application is using it". Presence in `env` proves only the former.
 
 ## 5. Still open
 
-1. **Google sign-in past the redirect is still unexercised.** This closes the
-   404: the browser now reaches Google's consent screen. Nothing has completed a
-   round trip through `GoogleSignInHandler`, so phase 5 §6's "first real sign-in
-   should be treated as testing" still stands, and is now actually possible.
-2. **`APP_ADMIN_BOOTSTRAP_EMAILS` has never promoted an account under compose,**
-   because until today it never arrived. The mechanism is tested in isolation;
-   the documented register-set-restart sequence has still not been run
-   end to end.
+1. ~~**Google sign-in past the redirect is still unexercised.**~~ **Closed the
+   same day.** A real sign-in went all the way through `GoogleSignInHandler`;
+   the account it created is in the database. Recorded in full in the next
+   section.
+2. ~~**`APP_ADMIN_BOOTSTRAP_EMAILS` has never promoted an account under
+   compose.**~~ **Closed the same day** — it promoted that Google-created
+   account to `ADMIN` on restart, the first time the documented sequence has
+   ever run under compose. It could not have worked before this entry's fix,
+   which is what makes it evidence that the fix landed.
 3. **No test asserts that `docker-compose.yml` carries what `.env.example`
    documents.** Both files are edited by hand and this defect is precisely their
    drifting apart. A check that every `APP_*`/`GOOGLE_*` key in `.env.example`
    appears in the compose backend service would have caught it on the day it
    landed.
+
+---
+
+# Google sign-in, executed end to end
+
+**Date:** 2026-09-06
+**Closes:** phase 5 §6 first bullet, phase 5 §8 item 7, and items 1 and 2 of the
+compose-defect entry above. No code changed — this records a run.
+
+## 1. What was observed
+
+One real sign-in, in a browser, against the developer's localhost Google OAuth
+client, through the compose stack:
+
+1. `GET /oauth2/authorization/google` redirected to Google, and **Google
+   authenticated the person** — the consent screen was reached and completed,
+   which is the step that had never happened before.
+2. The backend **created a local account** from the profile. This is the
+   `linkOrCreate` → *create* branch: no row matched the Google id and none
+   matched the email.
+3. The **Google id was linked** to that account.
+4. The **refresh cookie was issued** on the redirect response.
+5. The browser was **redirected to `/auth/callback`**, which **404s**. That is
+   phase 6's page and it does not exist yet. The redirect itself is correct
+   behaviour, and — worth stating — the 404 is the frontend's, not a failure of
+   the sign-in.
+6. The database showed **one row, `has_google = t`, `role = USER`**. Sign-in
+   through a provider grants no privilege, which is what that `USER` confirms.
+7. `APP_ADMIN_BOOTSTRAP_EMAILS`, set to that address, **promoted the account to
+   `ADMIN` on restart** — under compose, for the first time. The documented
+   register-set-restart sequence had never once run to completion before.
+
+Point 7 is also independent evidence for the previous entry: that variable could
+not reach the container until it was added to `docker-compose.yml`, so a
+successful promotion is only possible on the fixed file.
+
+## 2. What this does not cover
+
+The handler has four paths. One of them has now run. The others have not, and
+should not be described as working:
+
+- **Linking to an existing password account.** `linkOrCreate` falls back to
+  `findByEmail` and calls `linkGoogle` on the match. The account here was
+  created fresh, so that branch did not execute. It is the branch the javadoc
+  worries about — the one that prevents a duplicate row and the CITEXT
+  constraint turning a first Google sign-in into an unexplained 500 — and it
+  remains argued rather than observed. Registering with a password first, then
+  signing in with the same address through Google, is the test.
+- **A returning sign-in.** `findByGoogleId` returning a match, rather than
+  creating, has not been exercised. Signing in a second time covers it.
+- **The unverified-email rejection.** `?error=unverified_email` requires a Google
+  account with an unverified address, which the sign-in used did not have.
+- **The cookie being replayed.** It was set. Nothing has sent it back:
+  `/auth/callback` 404s, so `POST /api/v1/auth/refresh` from a browser has not
+  happened. Whether a browser stores and replays it under `SameSite=Strict`
+  across the `localhost:3000` → `localhost:8080` boundary is still reasoned from
+  the spec, exactly as phase 5 §6 says. Phase 6 is what finally tests it.
+
+And the run used the **developer's** OAuth client, which only works on localhost
+and which HANDOVER §4 says the developer deletes at handover. The owner's own
+client, on the real domain, is a different registration with different redirect
+URIs — HANDOVER §3.4 keeps that as a launch item for good reason.

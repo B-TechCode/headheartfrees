@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Wordmark } from "@/components/ui/Logo";
 import { focusRing } from "@/components/ui/styles";
+import { AccountMenu } from "@/components/auth/AccountMenu";
+import { useSession } from "@/lib/auth/SessionProvider";
+import { signInHref } from "@/lib/auth/sign-in-href";
+import type { UserSummary } from "@/lib/auth/types";
 
 /**
  * Primary navigation.
@@ -24,6 +28,7 @@ const NAV_LINKS = [
 
 export function Navbar() {
   const pathname = usePathname();
+  const { status, user } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
 
@@ -75,19 +80,44 @@ export function Navbar() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
-          <Link
-            href="/login"
-            className={cn(
-              "hidden md:inline-flex md:items-center md:justify-center",
-              "h-11 rounded-md border border-ink-faint bg-surface-raised px-4",
-              "font-sans text-body-sm font-medium text-ink",
-              "transition-[background-color,border-color] duration-150 ease-out",
-              "hover:bg-surface-sunk",
-              focusRing,
+          {/*
+            ===================================================================
+            The one rule for this corner
+            ===================================================================
+
+            While `status` is "restoring" this renders a reserved space and
+            nothing else. It must never render "Sign in" and then swap it for
+            an avatar: to someone who is signed in, a "Sign in" button
+            appearing on load does not read as a loading state, it reads as
+            having been logged out - on a site where being logged out could
+            plausibly mean something happened to their account. A blank gap for
+            one frame says nothing at all, which is the honest thing to say
+            while we do not yet know.
+
+            The width is reserved rather than left to collapse so the wordmark
+            and the nav do not slide sideways when the answer arrives.
+          */}
+          <div className="hidden md:block">
+            {status === "restoring" ? (
+              <div className="h-11 w-28" aria-hidden="true" />
+            ) : status === "authenticated" && user !== null ? (
+              <AccountMenu user={user} />
+            ) : (
+              <Link
+                href={signInHref(pathname)}
+                className={cn(
+                  "inline-flex h-11 w-28 items-center justify-center",
+                  "rounded-md border border-ink-faint bg-surface-raised px-4",
+                  "font-sans text-body-sm font-medium text-ink",
+                  "transition-[background-color,border-color] duration-150 ease-out",
+                  "hover:bg-surface-sunk",
+                  focusRing,
+                )}
+              >
+                Sign in
+              </Link>
             )}
-          >
-            Sign in
-          </Link>
+          </div>
 
           <button
             ref={toggleRef}
@@ -136,23 +166,82 @@ export function Navbar() {
                 </Link>
               </li>
             ))}
-            <li className="mt-2 border-t border-rule pt-2">
-              <Link
-                href="/login"
-                className={cn(
-                  "flex min-h-12 items-center rounded-md px-3",
-                  "font-sans text-body font-medium text-ink",
-                  "transition-colors duration-150 ease-out hover:bg-clay-wash",
-                  focusRing,
-                )}
-              >
-                Sign in
-              </Link>
-            </li>
+            {/*
+              Same rule as the desktop corner: nothing session-shaped is
+              rendered until the session is known. Here the panel simply has
+              one fewer item for a frame, and everything above it stays put.
+            */}
+            {status === "restoring" ? null : status === "authenticated" && user !== null ? (
+              <MobileAccountItems user={user} />
+            ) : (
+              <li className="mt-2 border-t border-rule pt-2">
+                <Link
+                  href={signInHref(pathname)}
+                  className={cn(
+                    "flex min-h-12 items-center rounded-md px-3",
+                    "font-sans text-body font-medium text-ink",
+                    "transition-colors duration-150 ease-out hover:bg-clay-wash",
+                    focusRing,
+                  )}
+                >
+                  Sign in
+                </Link>
+              </li>
+            )}
           </ul>
         </nav>
       </div>
     </header>
+  );
+}
+
+/**
+ * The mobile equivalent of the avatar menu.
+ *
+ * Flat list items rather than a nested dropdown: the panel is already a
+ * disclosure, and a menu inside a menu on a phone is two things to dismiss
+ * where one will do.
+ */
+function MobileAccountItems({ user }: { user: UserSummary }) {
+  const { signOut } = useSession();
+  const router = useRouter();
+
+  const itemClasses = cn(
+    "flex min-h-12 w-full items-center rounded-md px-3 text-left",
+    "font-sans text-body text-ink",
+    "transition-colors duration-150 ease-out hover:bg-clay-wash",
+    focusRing,
+  );
+
+  return (
+    <>
+      <li className="mt-2 border-t border-rule pt-3">
+        <p className="px-3 font-sans text-caption break-all text-ink-soft">{user.email}</p>
+      </li>
+      <li className="mt-1">
+        <Link href="/account" className={itemClasses}>
+          Your account
+        </Link>
+      </li>
+      {user.role === "ADMIN" ? (
+        <li>
+          <Link href="/admin/feedback" className={itemClasses}>
+            Moderation queue
+          </Link>
+        </li>
+      ) : null}
+      <li>
+        <button
+          type="button"
+          onClick={() => {
+            void signOut().then(() => router.push("/"));
+          }}
+          className={itemClasses}
+        >
+          Sign out
+        </button>
+      </li>
+    </>
   );
 }
 

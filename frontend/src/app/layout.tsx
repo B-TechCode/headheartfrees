@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Fraunces, Karla } from "next/font/google";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { SessionProvider } from "@/lib/auth/SessionProvider";
 import "@/styles/globals.css";
 
 /*
@@ -72,13 +73,35 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           Skip to content
         </a>
 
-        <Navbar />
+        {/*
+          SessionProvider wraps the whole tree and gates none of it. It renders
+          its children immediately and works out who is signed in alongside
+          them, never in front of them - see the comment at the top of that
+          file. This layout stays a server component: a client provider can
+          wrap server-rendered children, so nothing below is forced into the
+          client bundle by being here.
+        */}
+        <SessionProvider>
+          <Navbar />
 
-        <main id="main" className="app-layer flex-1">
-          {children}
-        </main>
+          <main id="main" className="app-layer flex-1">
+            {children}
+          </main>
 
-        <Footer />
+          {/*
+            No arrival prompt here, deliberately. PROJECT_BRIEF.md §7 asks for
+            "a dismissible soft prompt on first visit only"; it was built, and
+            it is not shipped. See PHASE_LOG.md, phase 6, for the whole
+            argument — the short version is that the home page already carries
+            "You do not sign up to write... Accounts exist later for people who
+            want to leave feedback under a name, and never for venting" as one
+            of its four promises, and the prompt could only repeat that in a
+            smaller voice. Reinstating it needs a reason that block does not
+            already cover.
+          */}
+
+          <Footer />
+        </SessionProvider>
       </body>
     </html>
   );

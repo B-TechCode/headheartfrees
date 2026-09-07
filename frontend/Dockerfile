@@ -24,6 +24,15 @@ WORKDIR /app
 
 ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+
+# Whether to show the Google button. Must agree with GOOGLE_CLIENT_ID on the
+# backend: set here without the backend configured and the button leads to a
+# 404, unset with the backend configured and the button is simply absent.
+# Defaults to false so an install that never mentions Google gets a working
+# password-only sign-in with no dead ends. See src/lib/auth/google.ts.
+ARG NEXT_PUBLIC_GOOGLE_SIGN_IN=false
+ENV NEXT_PUBLIC_GOOGLE_SIGN_IN=${NEXT_PUBLIC_GOOGLE_SIGN_IN}
+
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/node_modules ./node_modules

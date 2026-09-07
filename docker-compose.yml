@@ -77,6 +77,11 @@ services:
         # Baked into the bundle at build time. Changing it requires
         # `docker compose build frontend`, not just a restart.
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+        # Must agree with GOOGLE_CLIENT_ID above. The backend decides whether
+        # Google works; this only decides whether the button is drawn, and the
+        # two are separate settings because there is no endpoint yet that lets
+        # the frontend ask. Also build-time - a restart will not change it.
+        NEXT_PUBLIC_GOOGLE_SIGN_IN: ${NEXT_PUBLIC_GOOGLE_SIGN_IN:-false}
     environment:
       PORT: 3000
     ports:

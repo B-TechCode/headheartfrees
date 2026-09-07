@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -122,6 +123,14 @@ public class SecurityConfig {
         config.setAllowedOrigins(properties.allowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+        // A browser will not let script read a response header on a cross-origin
+        // response unless the server names it here. Retry-After is on the wire of
+        // every 429 already - GlobalExceptionHandler sets it - but without this
+        // line fetch() refuses to hand it over, and the frontend's
+        // ApiError.retryAfterSeconds is null on exactly the responses it exists
+        // for. Shipping a field that is always null is worse than not having one,
+        // so CorsExposedHeadersIT fails the build if this is removed.
+        config.setExposedHeaders(List.of(HttpHeaders.RETRY_AFTER));
         // The refresh token is an httpOnly cookie, so credentials must cross.
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);

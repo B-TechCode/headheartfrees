@@ -12,10 +12,11 @@ press **Release & Let Go**, and the words are gone. No therapy, no advice, no AI
 
 ## Status
 
-Phase 4 of 9 — **the vent flow**. The product's central path works end to end:
-you can write, release, and the words are gone. The phase table lives in the
-brief (§9), which was reordered — the vent flow moved from 6 to 4 and auth moved
-back, because `/vent` needs no account and nothing was gated behind auth.
+Phase 6 of 9 — **auth, front and back**. You can register, sign in with a
+password or with Google, and stay signed in across a reload; the vent flow still
+requires no account and never will. The phase table lives in the brief (§9),
+which was reordered — the vent flow moved from 6 to 4 and auth moved back,
+because `/vent` needs no account and nothing was gated behind auth.
 
 | Phase | | |
 |---|---|---|
@@ -23,8 +24,10 @@ back, because `/vent` needs no account and nothing was gated behind auth.
 | 2 | Design system | ✅ done |
 | 3 | Static pages | ✅ done |
 | 4 | Vent flow | ✅ done |
-| 5 | Auth backend | next |
-| 6–9 | Auth frontend, feedback, donation, hardening | pending |
+| 5 | Auth backend | ✅ done |
+| 6 | Auth frontend | ✅ done |
+| 7 | Feedback | next |
+| 8–9 | Donation, hardening | pending |
 
 ## Stack
 
@@ -135,7 +138,7 @@ entities. That is what makes any module liftable into its own service later.
 |---|---|---|
 | Run | `SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run` | `npm run dev` |
 | Build | `./mvnw clean package` | `npm run build` |
-| Test | `./mvnw verify` | — (added with the first component) |
+| Test | `./mvnw verify` | `npm test` (Vitest, jsdom) |
 | Types | — | `npm run typecheck` |
 | Lint | compiler runs `-Xlint:all -Werror` | `npm run lint` |
 

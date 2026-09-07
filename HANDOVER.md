@@ -3,7 +3,7 @@
 Everything the owner of this project needs to run it, and everything that has to
 change hands. Written to be read by someone who did not build it.
 
-Last updated: 2026-09-06. Phases 1–5 complete; see `PHASE_LOG.md` for the full
+Last updated: 2026-09-07. Phases 1–6 complete; see `PHASE_LOG.md` for the full
 build record and `PROJECT_BRIEF.md` for the design decisions behind it.
 
 ---
@@ -141,9 +141,15 @@ Two reasons this stays on the pre-launch list:
    sign-in with the same Google account, and the rejection of an unverified
    Google address, are the other two.
 
-The redirect lands on `/auth/callback`, which 404s until the frontend for it
-exists. That page is Phase 6's; the 404 is the missing page, not a broken
-sign-in.
+The redirect lands on `/auth/callback`. **That page now exists** (Phase 6) and
+serves; the 404 recorded above is closed.
+
+What it has not done is run. Nobody has completed a Google sign-in *through* the
+new page, so the step where the browser replays the refresh cookie to
+`POST /api/v1/auth/refresh` — the thing the page exists for — is still reasoned
+from the spec rather than observed. `curl` has no concept of `SameSite`, so the
+HTTP-level checks in the phase 6 log do not cover it. **This is one page load
+and should be the first thing anyone does with this build.**
 
 ### 3.5 The remaining Phase 9 items
 
@@ -173,9 +179,9 @@ anyone. It is simply how you make the boundary real.
 
 ## 5. Setting up Google sign-in in production
 
-The application needs exactly two environment variables. **No code changes.**
-If either is missing the site runs normally with no Google option, and password
-sign-in is unaffected.
+The backend needs exactly two environment variables, and the frontend needs one
+more. **No code changes.** If the backend pair is missing the site runs normally
+with no Google option, and password sign-in is unaffected.
 
 ### Steps
 
@@ -198,6 +204,18 @@ sign-in is unaffected.
    GOOGLE_CLIENT_SECRET=...
    APP_OAUTH2_SUCCESS_REDIRECT=https://yourdomain.com/auth/callback
    ```
+   Then tell the frontend to draw the button, and **rebuild it**:
+   ```
+   NEXT_PUBLIC_GOOGLE_SIGN_IN=true
+   docker compose build frontend
+   ```
+   This is a second setting rather than one because the backend has no endpoint
+   yet that says which sign-in providers it has, so the frontend cannot ask.
+   Getting it wrong is visible, not silent: set here without the backend
+   configured and the button leads to a 404; left `false` with the backend
+   configured and there is simply no button, while password sign-in works. A
+   restart will not pick it up — `NEXT_PUBLIC_*` values are baked in at build
+   time.
 9. **Publish the consent screen.** While it is in testing mode only explicitly
    listed test users can sign in. Basic email and profile scopes do not require
    Google's verification review.
@@ -254,6 +272,7 @@ be committed.
 | `GOOGLE_CLIENT_SECRET` | unset | |
 | `APP_OAUTH2_SUCCESS_REDIRECT` | localhost | Where Google sends the browser afterwards |
 | `APP_ADMIN_BOOTSTRAP_EMAILS` | empty | See §6 |
+| `NEXT_PUBLIC_GOOGLE_SIGN_IN` | `false` | Draws the Google button on the frontend. **Must agree with `GOOGLE_CLIENT_ID`.** Build time, like every `NEXT_PUBLIC_*` value. Set it `true` when the backend has Google credentials, and rebuild the frontend. |
 | `APP_COOKIE_SECURE` | `true` | Leave true. False only for a LAN IP with no TLS. |
 | `APP_JWT_ACCESS_TOKEN_TTL` | `PT15M` | |
 | `APP_JWT_REFRESH_TOKEN_TTL` | `P30D` | |
@@ -292,11 +311,23 @@ Postgres is required — the backend will not start without it.
 
 ```
 cd backend
-./mvnw verify
+./mvnw verify        # 116 tests. Needs Docker: Testcontainers runs a real
+                     # PostgreSQL 16.
+
+cd frontend
+npm test             # 33 tests. Vitest + Testing Library + jsdom. No browser,
+                     # no backend, no Docker.
+npm run typecheck
+npm run lint
 ```
 
-Needs Docker running; the integration tests use Testcontainers to run against a
-real PostgreSQL 16.
+The frontend suite is small and specific. Most of it exists to hold one
+property: **the session must never gate the page.** `/vent` needs no account, and
+the way that breaks is not a deliberate gate but a provider that withholds the
+render for a few hundred milliseconds while it asks the server who is signed in.
+`VentComposer.session.test.tsx` leaves a refresh permanently unresolved and then
+writes and releases straight through it. If that file starts failing, read it
+before changing it.
 
 ---
 
@@ -318,8 +349,9 @@ headheartfrees/
 └── frontend/           Next.js 15, TypeScript, Tailwind
     └── src/
         ├── app/        Pages
-        ├── components/ ui/ primitives, layout/, sections/
+        ├── components/ ui/ primitives, layout/, sections/, auth/
         ├── lib/        API client, helplines, safety list, contact
+        │   └── auth/   Session provider, hint cookie, return-to, Google
         └── styles/     globals.css — the only place colour is defined
 ```
 

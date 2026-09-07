@@ -50,13 +50,30 @@ export interface ApiRequestOptions {
   /** JSON-serialisable request body. */
   body?: unknown;
   signal?: AbortSignal;
+  /**
+   * Short-lived access token for the `Authorization` header.
+   *
+   * Deliberately a single named option rather than an open `headers` bag. The
+   * only header this application ever needs to vary is this one, and a general
+   * escape hatch is how a caller eventually attaches something it should not -
+   * on this codebase, the thing it must not attach is anything derived from
+   * what someone wrote in the vent box (rule 2.1).
+   *
+   * Callers should not read this from anywhere durable. `SessionProvider`
+   * holds the token in memory for the life of the tab and passes it here; it
+   * is never in localStorage or a cookie.
+   */
+  accessToken?: string | null;
 }
 
 /**
  * Calls the API and returns the parsed JSON body.
  *
- * Credentials are included on every request so the httpOnly refresh cookie is
- * sent once auth exists (phase 4).
+ * Credentials are included on every request so the browser attaches the
+ * httpOnly refresh cookie. That cookie is scoped to `/api/v1/auth`, so it rides
+ * along on the auth calls that need it and on nothing else - in particular not
+ * on `/api/v1/vent/**`, where an ambient identifier is precisely what rule 2.2
+ * is written against.
  *
  * @throws {ApiError} on any non-2xx response.
  */
@@ -64,15 +81,20 @@ export async function apiFetch<T>(
   path: string,
   options: ApiRequestOptions = {},
 ): Promise<T> {
-  const { method = "GET", body, signal } = options;
+  const { method = "GET", body, signal, accessToken } = options;
+
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     credentials: "include",
-    headers: body === undefined ? { Accept: "application/json" } : {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
     ...(signal ? { signal } : {}),
   });

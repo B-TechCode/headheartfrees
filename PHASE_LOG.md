@@ -2796,3 +2796,511 @@ And the run used the **developer's** OAuth client, which only works on localhost
 and which HANDOVER §4 says the developer deletes at handover. The owner's own
 client, on the real domain, is a different registration with different redirect
 URIs — HANDOVER §3.4 keeps that as a launch item for good reason.
+
+---
+
+# Phase 6 — Auth frontend
+
+**Date:** 2026-09-07
+Completed. Register, sign in, Google, session restore, avatar menu, one
+protected route. One backend change, approved in advance and no more.
+
+## 1. Status
+
+| Piece | State |
+|---|---|
+| `/login`, `/register` | built, with the shared registration message |
+| `/auth/callback` | built — it was the 404 the first Google sign-in landed on |
+| `/account` | built; the phase's only protected route |
+| Session restore, rotation, sign-out | built |
+| Avatar menu | built, hand-rolled, no Radix |
+| Soft arrival prompt | **built and cut.** §4 below |
+| Backend | one line: `Retry-After` exposed across origins, plus its test |
+
+`mvnw verify` — 116 tests, 0 failures (was 106).
+`npm test` — 38 tests, 6 files, 0 failures. First frontend tests in the project.
+`docker compose up --build` — clean, all three services healthy.
+
+## 2. The rule this phase was written around
+
+Rule 2.2: venting requires no account. The way that breaks in a phase like this
+is not a gate — a gate would be caught in review, and the rule is written down in
+three places. It breaks because a provider added for the navbar holds the render
+while it asks the server who is signed in, and `/vent` stalls for three hundred
+milliseconds on a bad connection, invisibly, for the person least able to wait.
+
+So `SessionProvider` renders its children immediately and unconditionally. There
+is no branch in which it returns a spinner, a skeleton or null. Only components
+that show session-dependent UI read `status`, and the only one that changes
+shape is the navbar.
+
+`VentComposer.session.test.tsx` holds it. The refresh in that file is not slow
+and does not fail — it is a promise that never settles, which is what a train
+tunnel actually looks like — and the composer has to accept a mood, accept
+typing, surface the crisis panel and complete a release straight through it. One
+test also asserts that an anonymous visitor makes **no** auth request at all, and
+one walks every request the page made looking for the typed sentence, on the
+grounds that a rule 2.1 leak would arrive as an analytics call or an error
+report rather than as an extra field on `/release`.
+
+## 3. Decisions
+
+### 3.1 The session hint cookie
+
+`hhf_session_hint=1`. Non-httpOnly, `SameSite=Lax`, thirty days, and **it is a
+boolean, not a credential** — the file says so at the top and the point is worth
+repeating here so nobody has to open it to find out. Forging it buys exactly one
+`POST /refresh` that 401s. The real credential is the httpOnly `hhf_refresh`
+cookie that script cannot read. Nothing anywhere trusts this value to decide who
+someone is; it decides only whether a request is worth making.
+
+Without it, every page load by every visitor calls `/refresh` to find out
+whether there is a session. That endpoint shares a 5/min per-IP bucket with
+login and register, and behind Docker — or any proxy not yet forwarding the
+client address, which is the state described in HANDOVER §10.3 — every visitor
+is one IP. Five anonymous page loads a minute would exhaust the bucket real
+sign-ins need. The site would be denying service to itself, and worse the more
+traffic it got.
+
+With it, a browser that has never signed in makes no auth request whatsoever.
+That is asserted in two separate test files.
+
+The lifetime can drift from the server's `APP_JWT_REFRESH_TOKEN_TTL`, which the
+frontend cannot read. Both directions are harmless and self-correcting: a hint
+that outlives the token costs one call that 401s and clears it; a token that
+outlives the hint means signing in again. Neither is a security property, which
+is the point.
+
+### 3.2 What a failed refresh is allowed to conclude
+
+| Response | Meaning | Result |
+|---|---|---|
+| 401 | the session is genuinely gone | sign out, clear the hint |
+| 429 | we were not allowed to ask | keep state, retry once |
+| network error | we could not ask | keep state, retry once |
+
+Only a 401 is the server saying "this person is not signed in". The obvious
+simplification — one `catch`, sign out, done — means a rate limiter having a
+busy minute silently ends somebody's session, and on the shared-IP deployment
+above the busy minute is not hypothetical.
+
+When a restore fails twice for a reason that is not a 401, the status settles to
+`anonymous` (the navbar has to offer a way in) but the **hint is kept**, because
+nothing ever established that the session was over and the next page load should
+try again rather than write the person off. When a *renewal* fails twice, the
+live session is left exactly as it is and another attempt is scheduled — the
+access token may well still be valid, and `authFetch` will find out otherwise.
+
+The retry delay comes from `Retry-After`, capped at sixty seconds. Six tests
+cover this table, including one that asserts the retry does not fire a second
+early: retrying at twenty-nine seconds against a header that said thirty spends
+a token the bucket has not refilled and earns another 429.
+
+### 3.3 The one backend change
+
+```java
+config.setExposedHeaders(List.of(HttpHeaders.RETRY_AFTER));
+```
+
+A browser will not let script read a response header on a cross-origin response
+unless the server names it. `Retry-After` was already on the wire of every 429 —
+`GlobalExceptionHandler` sets it, and `AuthRateLimitIT` asserts it — and
+`ApiError.retryAfterSeconds` in the frontend was nonetheless `null` in a browser,
+always, on precisely the responses the field exists for. Shipping a field that is
+permanently null is worse than not having one.
+
+`CorsExposedHeadersIT` asserts it three ways: on an ordinary cross-origin
+response, on the real 429 after exhausting the bucket, and — while there — that
+the preflight for `/refresh` still echoes the origin with
+`Allow-Credentials: true` rather than a wildcard, since the whole session
+restore depends on that.
+
+`AuthRateLimitIT` asserts the header is **sent**; this asserts it can be
+**read**. Both are needed. MockMvc reads response headers directly and would
+never notice the difference, which is exactly how this was invisible until now.
+
+### 3.4 Vitest, Testing Library, jsdom. No Playwright.
+
+First tests in `frontend/`. `npm test`, 38 of them across six files.
+
+A browser-driving suite would test more and would need a running backend, a
+database and a browser download in CI — a large amount of machinery for a phase
+whose new logic is one provider and three forms. jsdom cannot tell us how any of
+this looks. It can tell us what it does, and what it does is where the rules
+live. What that leaves unobserved is §7, and one item there is significant.
+
+### 3.5 The return destination
+
+`hhf_return_to`, five minutes, cleared on read. A cookie rather than a query
+parameter only because Google sign-in leaves this origin entirely — browser to
+backend to Google to backend to `/auth/callback` — and nothing in React state
+survives that. Ordinary same-origin sign-in uses `?next=` instead, because a URL
+that says where it will send you is easier to reason about than a cookie you
+cannot see.
+
+Both paths go through one sanitiser, and it is re-run on read as well as write:
+the cookie is writable by script, so validating only on write puts the guard on
+the wrong side of the trust boundary. "Starts with a slash" is not the check —
+`//evil.example` and `/\evil.example` both start with one and both resolve to
+another host, which is how a return-to becomes a phishing hop that begins with
+your own domain. Fourteen cases in `return-to.test.ts`.
+
+### 3.6 The restoring state never renders a signed-out navbar
+
+While `status` is `restoring` the navbar's right-hand corner renders a reserved
+gap and nothing else, and the mobile panel renders one fewer item. It never
+renders "Sign in" and then swaps it for an avatar.
+
+On most sites that flicker is a rendering wart. Here the signed-out state is a
+claim about somebody's account, and "you have been logged out" is a frightening
+thing to read on a page you opened because you were already having a bad day. A
+blank gap says nothing, which is the honest thing to say before the answer
+arrives. The width is reserved so the wordmark and nav do not slide.
+
+`Navbar.test.tsx` asserts no element anywhere in the header contains the text
+"sign in" while a refresh is pending, then resolves it and asserts the account
+menu appears without that text ever having been rendered. `RequireAuth` follows
+the same rule for the same reason — it must not redirect while restoring, or a
+signed-in person opening `/account` from a bookmark gets bounced to a form
+asking them to sign in to the account they are already in.
+
+### 3.7 Hand-rolled avatar menu
+
+Phase 2 deferred "Radix, for the avatar dropdown only" to this phase. It is
+still not installed. Every other primitive is hand-rolled, the navbar already
+hand-rolls a disclosure with the same escape-and-restore behaviour, and what
+Radix would have brought — roving focus, `role="menu"` semantics, outside-click
+and escape — is about fifty lines. A second or third menu is the moment to
+reconsider.
+
+`AccountMenu.test.tsx` covers what that decision took on: open puts focus on the
+first item, arrows move and wrap, Escape closes *and returns focus to the
+trigger* — the half that gets forgotten, and without which Escape drops a
+keyboard user at the top of the document. `role="menu"` is a promise to a screen
+reader that these things happen; a menu that announces itself that way and then
+does not behave that way is worse than an unadorned list of links.
+
+The focus code reads its items from the DOM rather than collecting them into a
+ref array by index. The array version was written first and was wrong: the
+indices shift when the ADMIN entry appears, leaving a stale detached node at the
+end of the list, and the arrow keys then move focus to nothing. One of the tests
+exists specifically for the three-item admin case.
+
+No avatar image. Nobody uploads one, Google's `picture` claim is deliberately
+not stored, and an `<img>` pointing at `googleusercontent.com` would tell Google
+which pages of this site a person is looking at. Two letters on a clay wash
+instead.
+
+### 3.8 What is deliberately absent
+
+- **No "forgot password" link.** There is no mail transport, so a reset link has
+  nowhere to send anything. A link to a page saying "not available yet" is worse
+  than no link: someone locked out would follow it and then have to work out for
+  themselves that there is no way back.
+- **No "your email is unverified" notice on `/account`.** The column exists,
+  `/me` reports it, nothing depends on it. A warning with no button that could
+  resolve it is a permanent complaint about something the person cannot fix.
+- **No delete-account button.** There is no endpoint. `/account` links to
+  `/contact` and says a person will do it, which is true.
+- **No password change.** Same reason as the missing reset.
+
+All four go in when email does. They are one feature, not four.
+
+## 4. The soft arrival prompt — built, then cut
+
+PROJECT_BRIEF.md §7 asks for "a dismissible soft prompt on first visit only,
+remembered via a cookie", that "must not cover the page, must not block `/vent`,
+and must have an obvious close control". It was built to that spec: one line in
+ordinary document flow, no overlay, no backdrop, no animation, cookie written on
+render so ignoring it was as final as closing it, and excluded from `/vent`,
+`/vent/released`, `/crisis-resources` and the auth pages.
+
+Then it was looked at, and there were only two places to put it:
+
+- **Above the footer**, where it is not intrusive and is also below the fold on
+  every page it can appear on — and where it would sit directly on top of the
+  crisis helpline strip. The last thing before those numbers should not be an
+  account prompt.
+- **Below the navbar**, where it would actually be read, and where it is the
+  first thing a first-time visitor sees, before the site has said what it is.
+
+Neither is good, and that was the argument for cutting it until the deciding
+fact turned up: **the home page already says this, better, as one of its four
+promises.**
+
+> "You do not sign up to write. There is no email box between you and the page.
+> Accounts exist later for people who want to leave feedback under a name, and
+> never for venting."
+
+And `HowItWorks` step one opens "No account, no email, no waiting." The prompt
+could only repeat, in a smaller voice and a worse position, a message the home
+page already makes as a headline. So it is not shipped, `ArrivalPrompt.tsx` is
+deleted rather than left commented out, and `layout.tsx` carries a note saying
+where the argument is. Reinstating it needs a reason that promise block does not
+already cover.
+
+The brief is not wrong to ask for it. It asked before the home page existed.
+
+## 5. Two concurrency bugs found while building, not by review
+
+Both come from the same fact: **refresh tokens rotate, and presenting a spent
+one is how the backend detects theft.** `RefreshTokenService` revokes the entire
+family and every session from that sign-in ends. So two overlapping refreshes
+send the same cookie, and the second looks exactly like an attacker replaying a
+stolen token — the punishment for a race is a surprise sign-out.
+
+Verified over HTTP against the running stack rather than argued: replaying a
+spent token returns 401, and the token that had legitimately replaced it is 401
+too. The family really is gone.
+
+1. **Concurrent refreshes.** The scheduled renewal, a 401 retry inside
+   `authFetch`, and the visibility-change catch-up can all fire at once.
+   `SessionProvider` now deduplicates: callers share one in-flight attempt, and
+   the first caller's mode decides what happens on failure.
+2. **StrictMode on `/auth/callback`.** `reactStrictMode: true`, so effects run
+   twice in development on the same instance. Without a guard ref the second run
+   replays the cookie the first had just spent and signs the person straight back
+   out — a bug that appears only in development and looks exactly like Google
+   sign-in being broken.
+
+Neither was in the plan. Both are in the code with the reasoning attached.
+
+## 6. Verification actually run
+
+| Check | Result |
+|---|---|
+| `./mvnw verify` | **PASS** — 116 tests, 0 failures, 0 errors (44 unit, 72 IT) |
+| `npm test` | **PASS** — 38 tests, 6 files |
+| `npm run typecheck` | **PASS** — clean |
+| `npm run lint` | **PASS** — clean |
+| `npm run build` | **PASS** — 15 routes, all prerendered static |
+| `docker compose up -d --build` | **PASS** — db, backend, frontend all healthy |
+
+Against the running compose stack, over HTTP:
+
+| Check | Result |
+|---|---|
+| `/login`, `/register`, `/auth/callback`, `/account`, `/vent`, `/` | all **200** |
+| `/auth/callback` no longer 404s | **closed** — it was the phase-5 landing failure |
+| register, then the shared 201 message | byte-for-byte the string the UI renders |
+| login, then `Set-Cookie: hhf_refresh` | `Path=/api/v1/auth; Secure; HttpOnly; SameSite=Strict` |
+| refresh, then rotation | new token issued, old one replaced |
+| replaying the spent token | **401**, and the rotated token is **401** too — the family is revoked |
+| 429 after six logins | `Retry-After: 3` **and** `Access-Control-Expose-Headers: Retry-After` |
+| the same 429's CORS headers | `Allow-Origin` echoed once, `Allow-Credentials: true`, no wildcard |
+| `/me` with a bearer token | 200, and the body is exactly `UserSummary` — no hash, no `googleId` |
+| `/me` with no token | 401 |
+| `POST /vent/release` with no account and no cookie | **204** |
+| the server-rendered HTML of `/` | contains **no** "Sign in" — the neutral restoring state is what actually ships, not just what the tests assert |
+| `/login` with `NEXT_PUBLIC_GOOGLE_SIGN_IN` unset | no Google button, password form intact |
+
+## 7. NOT verified
+
+Stated plainly, because two of these are things this phase was supposed to
+close.
+
+1. **No browser was driven.** That was the decision in §3.4 and it is the right
+   one for the logic, but it means everything below is reasoned rather than
+   observed.
+
+2. **The refresh cookie has still not been replayed by a real browser.** The
+   phase 5 log says "Phase 6 is what finally tests it" about whether a
+   `SameSite=Strict` cookie set on `localhost:8080` comes back on an XHR from
+   `localhost:3000`. The page that would do it now exists and 200s. It has not
+   been opened in a browser. **curl has no concept of SameSite**, so the HTTP
+   checks in §6 prove the server side and prove nothing about this. Port does not
+   affect same-site, so it should work — which is exactly what phase 5 already
+   said, and saying it again is not evidence. This is the first thing to try, and
+   it is one page load.
+
+3. **Google sign-in has not been run through the new callback page.** The
+   handler's other three branches — linking to an existing password account, a
+   returning sign-in, the unverified-address rejection — remain exactly as
+   unexercised as HANDOVER §3.4 records. Linking to an existing password account
+   is still the one worth testing deliberately.
+
+4. **Nothing has been looked at.** No responsive check at the breakpoints, no
+   visual review, no screen reader, no automated a11y run. The keyboard
+   behaviour in the avatar menu is written and unit-tested for structure, not
+   driven by hand.
+
+5. **`NEXT_PUBLIC_GOOGLE_SIGN_IN` is duplicated configuration.** The failure
+   modes are visible rather than silent — set without the backend configured and
+   the button 404s; unset with it configured and the button is absent while
+   password sign-in works. It exists because the backend has no endpoint saying
+   which providers are configured, and adding one was outside the single backend
+   change approved for this phase. Phase 7 should add
+   `GET /api/v1/auth/providers` and delete this variable.
+
+6. **`npm audit` reports 2 vulnerabilities (1 high) in `postcss`**, reached
+   through `next`. Pre-existing, not introduced here, and the fix is Next 16 — a
+   major upgrade, and phase 9's call.
+
+## 8. Environment variables introduced
+
+| Variable | Default | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_GOOGLE_SIGN_IN` | `false` | Draws the Google button. Build time — `docker compose build frontend`. Must agree with `GOOGLE_CLIENT_ID`. See §7.5. |
+
+Added to `.env.example`, `docker-compose.yml` and `frontend/Dockerfile`.
+
+Two browser cookies are now written by the frontend, and neither is a
+credential: `hhf_session_hint` (a boolean, 30 days) and `hhf_return_to` (a
+same-origin path, 5 minutes, cleared on use). `hhf_refresh` remains the
+backend's, httpOnly, and unreadable from here.
+
+## 9. Still open
+
+Carried forward, with movement:
+
+1. ~~**`/login` still 404s.**~~ **Closed** — `/login`, `/register`,
+   `/auth/callback` and `/account` all exist and serve.
+2. ~~**Phase 6 must render the registration message from phase 5 §4.**~~
+   **Closed** — `/register` renders `RegistrationResponse.message` verbatim with
+   a link to `/login`, and `RegisterForm.test.tsx` fails if either is dropped.
+3. **`/support` still 404s.** Phase 8.
+4. **Contact address is still a placeholder** — `lib/contact.ts` line 20.
+   `/account` now links to `/contact` for account removal, so the placeholder is
+   on one more path than it was.
+5. **Helpline re-verification cadence** still undecided.
+6. **Privacy policy still needs legal review.**
+7. **Safety-list review** — the Hinglish set still needs a native speaker.
+8. **Refresh token pruning** has no job. Phase 9.
+9. **New — the browser-side checks in §7.** Items 2 and 3 there are one browser
+   session's work and should be done before phase 7 builds on this.
+10. **New — `GET /api/v1/auth/providers`**, to delete
+    `NEXT_PUBLIC_GOOGLE_SIGN_IN`. Phase 7.
+11. **New — `/admin/feedback` is linked from the avatar menu for ADMIN accounts
+    and does not exist yet.** Phase 7 builds it. The link is there now because
+    the role already exists and an admin with no route to their own queue is a
+    link somebody adds badly later.
+
+---
+
+# `/login` drew no Google button — the third wiring defect of the same class
+
+## 1. The symptom
+
+`/login` rendered straight into the Email field. No Google button, no divider,
+on a stack where the backend was fully configured and a real Google sign-in had
+already completed through it — the one recorded two sections above.
+
+## 2. Cause
+
+Not a missing component. `LoginForm.tsx` line 90 draws the button and the
+divider together behind `GOOGLE_SIGN_IN_ENABLED`, which is
+`process.env.NEXT_PUBLIC_GOOGLE_SIGN_IN === "true"`, inlined at build time.
+
+Pulled out of the running container, the shipped chunk read:
+
+```js
+6940:(e,t,n)=>{ ... let a=!1, s="".concat(r.JR,"/oauth2/authorization/google"); ... }
+```
+
+`a` is `GOOGLE_SIGN_IN_ENABLED`, baked `false`.
+
+This time `docker-compose.yml`, `frontend/Dockerfile` and `.env.example` were
+all correct — the phase 6 work had plumbed the variable properly, as a
+`build.args` entry rather than an `environment` one. The break was one step
+further out: the operator's gitignored `.env` never got the key. It was added to
+`.env.example` during phase 6, *after* that `.env` was written from an earlier
+copy, so compose fell through to `${NEXT_PUBLIC_GOOGLE_SIGN_IN:-false}` and
+baked the default.
+
+Diffing key sets, it was the only key in `.env.example` absent from `.env`.
+
+## 3. The third instance, and what closes the class
+
+| # | Phase | Documented | Wired into compose | Set in `.env` | Found by |
+|---|---|---|---|---|---|
+| 1 | 5 | yes | **no** | yes | loading a page |
+| 2 | 5 | yes | **no** | yes | an admin promotion that never happened |
+| 3 | 6 | yes | yes | **no** | loading a page |
+
+Same shape every time: hand-edited files that have to agree, with nothing
+holding them together, and the disagreement surfacing in a browser rather than
+in the suite. Phase 5 §5 item 3 already named the missing check. This entry
+builds it.
+
+`EnvExampleComposeDriftTest` (backend, `mvn test`, no Spring context, ~0.1s)
+asserts both directions: every `APP_*`, `GOOGLE_*` and `NEXT_PUBLIC_*` key in
+`.env.example` reaches its compose service, and compose interpolates no such key
+that `.env.example` fails to document. The routing table is part of the
+assertion — `NEXT_PUBLIC_*` must land in the frontend's **`build.args`**, not its
+`environment`, because a value placed under `environment` would be accepted by
+compose, would appear in `docker compose exec frontend env`, and would still be
+missing from the bundle the browser downloads.
+
+It lives in the backend suite for the dull reason that snakeyaml is already on
+the classpath there and nothing else in the repo runs on every build. There is
+still no CI; when there is, this is one of the things it must run.
+
+**It was checked against all three bugs**, because a drift test that has never
+failed is the vacuously-passing negative test phase 5 §3 warned about:
+
+| Compose mutated to | Result |
+| --- | --- |
+| `APP_*`/`GOOGLE_*` stripped from backend `environment` (the phase-5 state) | fails, names `APP_CORS_ALLOWED_ORIGINS` first |
+| `NEXT_PUBLIC_GOOGLE_SIGN_IN` removed from `build.args` | fails, names it and the service |
+| the same key moved to the frontend's `environment` | **still fails** — the near-miss that would have looked right in review |
+| unmodified | passes |
+
+What it cannot do is read `.env`, which is gitignored and rightly absent from
+CI — and instance 3 lived exactly there. What it closes for that case is
+narrower but real: `.env.example` stays a complete template, so an operator
+diffing against it sees the missing key.
+
+`GoogleSignInGate.test.tsx` holds the other half — the component gate itself,
+on both forms, for `"true"` / `"false"` / unset / `"1"`. Under vitest
+`process.env.NEXT_PUBLIC_*` is an ordinary runtime lookup, which is what makes
+`vi.stubEnv` work there and why it proves nothing about a real bundle. The two
+tests are deliberately split along that line. Checked against a broken gate:
+hardcoding `GOOGLE_SIGN_IN_ENABLED = true` fails 6 of its 8 tests.
+
+## 4. Verification actually run
+
+| Check | Result |
+| --- | --- |
+| `mvn test` (backend) | **46 tests, 0 failures** — 44 before, plus the two new ones |
+| `npm test` (frontend) | **46 tests, 0 failures** — 38 before, plus the eight new ones |
+| `npm run typecheck` / `npm run lint` | clean |
+| `docker compose build frontend` with `.env` set to `true` | chunk `page-c87f5ae72fc5c2bb.js`, gate baked **`let a=!0`** |
+| `docker build --build-arg NEXT_PUBLIC_GOOGLE_SIGN_IN=false` | chunk `page-bc469799636594a0.js`, gate baked **`let a=!1`** |
+| running container after `docker compose up -d frontend` | serves `page-c87f5ae72fc5c2bb.js`, `let a=!0`, healthy |
+
+The false-build chunk hash is byte-identical to the one the broken container was
+serving before the fix, which is what makes the A/B a controlled one rather than
+two builds that merely differ: the same content addresses to the same hash, so
+the flag is demonstrably the only input that changed.
+
+**Not verified in a browser.** `/login` renders its form client-side inside a
+`Suspense` boundary, so the served HTML carries the fallback either way and
+`curl` cannot see the button. A jsdom hydration harness was tried and abandoned
+— it failed to hydrate Next 15 / React 19 at all, producing no email field
+either, so it was evidence of nothing. The bundle A/B plus the component tests
+cover both halves of the mechanism, but nobody has yet watched the button appear
+on screen. That is one page load and should be the first thing done next.
+
+## 5. Environment variables
+
+No new variable. `NEXT_PUBLIC_GOOGLE_SIGN_IN` was already in `.env.example`,
+`docker-compose.yml` and `frontend/Dockerfile`, all correct and all with the
+build-time note. Added in this entry:
+
+- `.env` — `NEXT_PUBLIC_GOOGLE_SIGN_IN=true`, the actual fix.
+- `frontend/.env.local` — so `npm run dev` draws the button too. Gitignored by
+  the root `.gitignore`'s `.env.*`, which has no slash and so matches at any
+  depth. It is a **fourth** copy of this setting, and the drift test cannot see
+  it either; that is an argument for §6, not against the file.
+
+## 6. Still open
+
+1. **`GET /api/v1/auth/providers` deletes this whole class for Google.** Carried
+   from phase 6 §9 item 10, now with a third instance behind it. The flag exists
+   only because the frontend cannot ask the backend what is configured. One
+   endpoint removes `NEXT_PUBLIC_GOOGLE_SIGN_IN` from `.env`, `.env.example`,
+   `docker-compose.yml`, `frontend/Dockerfile` and `frontend/.env.local` at
+   once, and makes both new tests unnecessary rather than merely passing.
+2. **Watch `/login` in a browser.** See §4.
+3. **There is still no CI.** Both suites pass locally and neither runs anywhere
+   else. The drift test is only as good as the thing that invokes it.

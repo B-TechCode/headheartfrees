@@ -76,7 +76,7 @@ class AuthResponseLeakageIT extends AuthTestSupport {
                 .andReturn());
 
         // Refresh.
-        responses.add(mockMvc.perform(post("/api/v1/auth/refresh")
+        responses.add(mockMvc.perform(guardedPost("/api/v1/auth/refresh")
                         .cookie(refreshCookieOf(login)))
                 .andReturn());
 
@@ -118,7 +118,7 @@ class AuthResponseLeakageIT extends AuthTestSupport {
     void rotatedTokenStaysInTheCookie() throws Exception {
         MvcResult login = registerAndLogin(EMAIL);
 
-        MvcResult refreshed = mockMvc.perform(post("/api/v1/auth/refresh")
+        MvcResult refreshed = mockMvc.perform(guardedPost("/api/v1/auth/refresh")
                         .cookie(refreshCookieOf(login)))
                 .andExpect(status().isOk())
                 .andReturn();

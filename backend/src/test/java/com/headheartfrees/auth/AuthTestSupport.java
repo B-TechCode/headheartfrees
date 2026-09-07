@@ -6,11 +6,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.headheartfrees.common.web.ClientIpRateLimiter;
+import com.headheartfrees.common.web.CsrfHeaderFilter;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.MvcResult;
 
 /**
@@ -63,6 +65,22 @@ abstract class AuthTestSupport extends com.headheartfrees.PostgresTestBase {
         refreshTokens.deleteAll();
         users.deleteAll();
         rateLimiter.reset();
+    }
+
+    /**
+     * A POST carrying the header {@link CsrfHeaderFilter} requires.
+     *
+     * <p>{@code /refresh} and {@code /logout} are refused without it, so every
+     * test that is not <em>about</em> that guard goes through here. Written as
+     * one helper rather than repeated inline so that the day the header name
+     * changes, the suite does not need thirty edits to agree with the filter.
+     *
+     * <p>{@code CsrfHeaderIT} deliberately does not use this - it builds the
+     * bare request itself, because a test of the guard that obtained its header
+     * from a helper would pass if the helper were wrong.
+     */
+    protected static MockHttpServletRequestBuilder guardedPost(String path) {
+        return post(path).header(CsrfHeaderFilter.HEADER, CsrfHeaderFilter.REQUIRED_VALUE);
     }
 
     protected void register(String email, String password, String displayName) throws Exception {

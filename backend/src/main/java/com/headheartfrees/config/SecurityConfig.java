@@ -1,6 +1,8 @@
 package com.headheartfrees.config;
 
 import com.headheartfrees.auth.JwtAuthenticationFilter;
+import com.headheartfrees.common.web.ApiErrorWriter;
+import com.headheartfrees.common.web.CsrfHeaderFilter;
 import com.headheartfrees.common.web.SecurityErrorHandler;
 import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
@@ -72,6 +74,7 @@ public class SecurityConfig {
             HttpSecurity http,
             SecurityErrorHandler securityErrorHandler,
             JwtAuthenticationFilter jwtAuthenticationFilter,
+            ApiErrorWriter apiErrorWriter,
             ObjectProvider<ClientRegistrationRepository> clientRegistrations,
             ObjectProvider<AuthenticationSuccessHandler> oauth2SuccessHandler)
             throws Exception {
@@ -93,6 +96,17 @@ public class SecurityConfig {
                 // before the username/password filter, which is disabled but is
                 // still the conventional anchor point in the chain.
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                // Requires X-Requested-With on the two cookie-authenticated
+                // POSTs. Anchored to the JWT filter rather than to the
+                // username/password filter so the order of the two additions is
+                // stated rather than incidental: this runs first, and a request
+                // missing the header is refused before any token is parsed.
+                //
+                // Both sit after Spring Security's CorsFilter, which is what
+                // makes the 403 a readable cross-origin response rather than an
+                // opaque CORS failure, and what lets the OPTIONS preflight
+                // through untouched.
+                .addFilterBefore(new CsrfHeaderFilter(apiErrorWriter), JwtAuthenticationFilter.class)
                 // Rejections here never reach @RestControllerAdvice, so they are
                 // rendered in the section 6 error shape by SecurityErrorHandler.
                 .exceptionHandling(exceptions -> exceptions
@@ -122,7 +136,14 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(properties.allowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+        // X-Requested-With is what CsrfHeaderFilter demands on /refresh and
+        // /logout, and it is not CORS-safelisted - so without it named here the
+        // preflight fails and the browser never sends the real request at all.
+        // The endpoint would then be unreachable from the frontend while
+        // remaining perfectly reachable from curl, which is the failure mode
+        // that looks like the guard working. CsrfHeaderIT pins this.
+        config.setAllowedHeaders(
+                List.of("Authorization", "Content-Type", "Accept", CsrfHeaderFilter.HEADER));
         // A browser will not let script read a response header on a cross-origin
         // response unless the server names it here. Retry-After is on the wire of
         // every 429 already - GlobalExceptionHandler sets it - but without this

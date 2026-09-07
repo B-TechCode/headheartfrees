@@ -35,7 +35,7 @@ class AuthRefreshRotationIT extends AuthTestSupport {
         MvcResult login = registerAndLogin(EMAIL);
         String firstRefresh = refreshTokenValueOf(login);
 
-        MvcResult refreshed = mockMvc.perform(post("/api/v1/auth/refresh")
+        MvcResult refreshed = mockMvc.perform(guardedPost("/api/v1/auth/refresh")
                         .cookie(refreshCookieOf(login)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
@@ -52,7 +52,7 @@ class AuthRefreshRotationIT extends AuthTestSupport {
     void rotationKeepsOneFamily() throws Exception {
         MvcResult login = registerAndLogin(EMAIL);
 
-        mockMvc.perform(post("/api/v1/auth/refresh").cookie(refreshCookieOf(login)))
+        mockMvc.perform(guardedPost("/api/v1/auth/refresh").cookie(refreshCookieOf(login)))
                 .andExpect(status().isOk());
 
         assertThat(refreshTokens.findAll())
@@ -81,13 +81,13 @@ class AuthRefreshRotationIT extends AuthTestSupport {
         Cookie stolen = refreshCookieOf(login);
 
         // The legitimate client rotates.
-        MvcResult rotated = mockMvc.perform(post("/api/v1/auth/refresh").cookie(stolen))
+        MvcResult rotated = mockMvc.perform(guardedPost("/api/v1/auth/refresh").cookie(stolen))
                 .andExpect(status().isOk())
                 .andReturn();
         Cookie legitimate = refreshCookieOf(rotated);
 
         // The thief presents the copy they took before the rotation.
-        mockMvc.perform(post("/api/v1/auth/refresh").cookie(stolen))
+        mockMvc.perform(guardedPost("/api/v1/auth/refresh").cookie(stolen))
                 .andExpect(status().isUnauthorized());
 
         assertThat(refreshTokens.findAll())
@@ -97,7 +97,7 @@ class AuthRefreshRotationIT extends AuthTestSupport {
 
         // And the legitimate client is now locked out too. That is the intended
         // outcome: the server cannot tell victim from thief, so both re-auth.
-        mockMvc.perform(post("/api/v1/auth/refresh").cookie(legitimate))
+        mockMvc.perform(guardedPost("/api/v1/auth/refresh").cookie(legitimate))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -106,13 +106,13 @@ class AuthRefreshRotationIT extends AuthTestSupport {
     void reuseIsIndistinguishableFromGarbage() throws Exception {
         MvcResult login = registerAndLogin(EMAIL);
         Cookie stolen = refreshCookieOf(login);
-        mockMvc.perform(post("/api/v1/auth/refresh").cookie(stolen)).andExpect(status().isOk());
+        mockMvc.perform(guardedPost("/api/v1/auth/refresh").cookie(stolen)).andExpect(status().isOk());
 
-        MvcResult reused = mockMvc.perform(post("/api/v1/auth/refresh").cookie(stolen))
+        MvcResult reused = mockMvc.perform(guardedPost("/api/v1/auth/refresh").cookie(stolen))
                 .andExpect(status().isUnauthorized())
                 .andReturn();
 
-        MvcResult garbage = mockMvc.perform(post("/api/v1/auth/refresh")
+        MvcResult garbage = mockMvc.perform(guardedPost("/api/v1/auth/refresh")
                         .cookie(new Cookie(RefreshCookie.NAME, "not-a-real-token")))
                 .andExpect(status().isUnauthorized())
                 .andReturn();
@@ -130,7 +130,7 @@ class AuthRefreshRotationIT extends AuthTestSupport {
     @Test
     @DisplayName("refresh with no cookie at all is 401, not 500")
     void refreshWithoutCookie() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/refresh"))
+        mockMvc.perform(guardedPost("/api/v1/auth/refresh"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
@@ -143,9 +143,9 @@ class AuthRefreshRotationIT extends AuthTestSupport {
         MvcResult sessionTwo = login(EMAIL, PASSWORD).andExpect(status().isOk()).andReturn();
 
         Cookie one = refreshCookieOf(sessionOne);
-        mockMvc.perform(post("/api/v1/auth/refresh").cookie(one)).andExpect(status().isOk());
+        mockMvc.perform(guardedPost("/api/v1/auth/refresh").cookie(one)).andExpect(status().isOk());
         // Reuse on session one.
-        mockMvc.perform(post("/api/v1/auth/refresh").cookie(one))
+        mockMvc.perform(guardedPost("/api/v1/auth/refresh").cookie(one))
                 .andExpect(status().isUnauthorized());
 
         // Five auth calls have now been spent (register, two logins, two
@@ -156,7 +156,7 @@ class AuthRefreshRotationIT extends AuthTestSupport {
 
         // Session two is a different family and must be untouched: signing in
         // on a second device should not be collateral damage.
-        mockMvc.perform(post("/api/v1/auth/refresh").cookie(refreshCookieOf(sessionTwo)))
+        mockMvc.perform(guardedPost("/api/v1/auth/refresh").cookie(refreshCookieOf(sessionTwo)))
                 .andExpect(status().isOk());
     }
 }

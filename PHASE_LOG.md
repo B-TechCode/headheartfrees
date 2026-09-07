@@ -3304,3 +3304,136 @@ build-time note. Added in this entry:
 2. **Watch `/login` in a browser.** See §4.
 3. **There is still no CI.** Both suites pass locally and neither runs anywhere
    else. The drift test is only as good as the thing that invokes it.
+
+---
+
+# A custom header on `/refresh` and `/logout`
+
+## 1. The change
+
+`POST /api/v1/auth/refresh` and `POST /api/v1/auth/logout` now require
+`X-Requested-With: fetch`. Without it: `403`, code `CSRF_HEADER_REQUIRED`, and
+nothing rotated, spent or revoked.
+
+Those two are the only endpoints whose sole credential is the `hhf_refresh`
+cookie, which the browser attaches by itself. Everything else either carries its
+credential in the body (`/register`, `/login`) or requires a Bearer token script
+had to attach deliberately (`/me`). A cross-site `<form>` cannot set a header,
+and setting one from script must first clear a CORS preflight against the origin
+allowlist — so the requirement is the check.
+
+Four files carry it: `CsrfHeaderFilter`, its installation and the CORS
+`allowedHeaders` entry in `SecurityConfig`, and one line in `lib/api.ts`.
+
+## 2. A correction to the premise this was requested under
+
+**The refresh cookie is `SameSite=Strict`, not `Lax`.** `RefreshCookie` line 67,
+unchanged since phase 5, and the phase 5 log records it at three separate
+points. Only `hhf_session_hint` is `Lax`, and that is the literal string `"1"` —
+not a credential, and `session-hint.ts` says so at length.
+
+So the attack as described — a malicious page causing a signed-in visitor's
+browser to call `/refresh` — **does not currently work in any current browser**.
+The cookie is not attached cross-site at all. This change did not close an open
+hole.
+
+It is still worth having, for one specific reason. `RefreshCookie`'s own comment
+and PROJECT_BRIEF §5 both record that `SameSite=Strict` is conditional: the day
+the frontend and backend move to different registrable domains it must become
+`SameSite=None; Secure`. On that day the described attack becomes real and
+severe, and the only thing standing in front of it is this filter. Adding it
+afterwards means shipping the hole first and remembering later. It is a second,
+independent lock on a door whose first lock is documented as temporary.
+
+**There is also no "phase 6 CSRF item" to close.** The request said to note that
+this closes one; the log has none. Searching every phase for `csrf`,
+`cross-site` and `forgery` returns exactly one hit — a line in the phase 1 file
+tree reading "CSRF off". What this change does relate to is phase 6 §7 item 2,
+which remains open and is not closed by this: whether a `SameSite=Strict` cookie
+survives the cross-port XHR has still never been observed in a browser. That
+question is now less load-bearing than it was, because the header no longer
+depends on the answer — but it is not answered.
+
+## 3. Decisions
+
+**403 with its own code, not 401.** A client has to distinguish "you forgot the
+header" from "your credentials are bad": the first is a caller bug, the second
+means sign in again. Conflating them sends someone to re-authenticate over a
+missing header, or retries forever over a dead session. `CsrfHeaderIT` asserts
+both codes on the same endpoint in the same test, so they cannot silently merge.
+
+**Not a `@Component`.** Spring Boot auto-registers beans of type `Filter` into
+the plain servlet chain, which runs before Spring Security's and therefore
+before its `CorsFilter`. A rejection from out there carries no CORS headers, so
+a browser would see an opaque CORS failure instead of the section 6 body. The
+filter is constructed by `SecurityConfig` and installed in exactly one place.
+
+**Anchored to `JwtAuthenticationFilter`, not to `UsernamePasswordAuthenticationFilter`.**
+Two `addFilterBefore` calls against the same anchor leave their relative order
+incidental. Anchoring the second to the first states it: the header is checked
+before any token is parsed.
+
+**`ApiErrorWriter` extracted.** `SecurityErrorHandler` already existed to render
+filter-chain rejections in the section 6 shape, and its own comment says both
+its responses live in one class so they "cannot drift apart". This filter is a
+third such rejection. Rather than hand-roll a third copy of the serialisation,
+it moved to one component both use. `SecurityErrorHandler`'s behaviour is
+unchanged; only the copy is gone.
+
+**The header is sent on every frontend request, not just the two.** The
+alternative is a per-path rule in `api.ts` that has to stay in step with
+`CsrfHeaderFilter`, which is the drift this repo keeps paying for. Sending it
+everywhere costs nothing: `/api/v1/vent/**` neither requires it nor rejects it,
+so rule 2.2 is untouched and any other client still works with no ceremony.
+
+## 4. Verification actually run
+
+`mvn verify` — **46 unit + 81 integration, 0 failures** (72 integration before;
+`CsrfHeaderIT` adds 9). `npm test` 46 passed, typecheck and lint clean.
+
+The guard was checked against its own removal, not merely watched to pass:
+
+| Mutation | Result |
+| --- | --- |
+| `isGuarded` forced to `false` | 3 of 9 fail — both rejection tests and the distinct-code test |
+| `X-Requested-With` dropped from `allowedHeaders` | `preflightAllowsTheHeader` fails: the **preflight itself** 403s, which is precisely the "unreachable from a browser, fine from curl" failure |
+| unmodified | 9 pass |
+
+Then against the running stack, `docker compose up -d --build backend frontend`:
+
+| Check | Result |
+| --- | --- |
+| `POST /refresh` without the header | **403** `CSRF_HEADER_REQUIRED` in the section 6 shape |
+| `POST /logout` without the header | **403** `CSRF_HEADER_REQUIRED` |
+| both with the header | **200** / **204** |
+| preflight, `Access-Control-Request-Headers: x-requested-with` | **200**, `Access-Control-Allow-Headers: x-requested-with, content-type` |
+| `POST /vent/release`, no header at all | **204** |
+| `GET /vent/stats`, no header at all | **200** |
+| full lifecycle with `Origin: http://localhost:3000` — register, login, refresh, refresh, logout | 201 / 200 / 200 / 200 / 204 |
+| refresh after logout | **401 `UNAUTHORIZED`** — distinct from the 403, on the wire |
+| `X-Requested-With":"fetch"` in the shipped frontend bundle | present in 3 chunks |
+
+The rejection responses carry no `Set-Cookie`, and `CsrfHeaderIT` asserts the
+refused call left the token spendable by refreshing successfully with the same
+cookie afterwards. A guard that refused the request *after* consuming the token
+would hand an attacker the forced-rotation outcome while looking like it worked.
+
+## 5. NOT verified
+
+**No browser was driven.** The request asked for sign-in, refresh-on-reload and
+sign-out to be confirmed in a real browser, and that has not happened — the same
+gap as the previous two entries, for the same reason: nothing here can drive
+one, and the jsdom harness tried last time cannot hydrate Next 15 / React 19.
+
+What was done instead is the full lifecycle over HTTP with the browser's own
+`Origin` header, plus proof that the header is baked into the shipped bundle.
+That exercises the server side of every request a browser would make and the
+client side of none of them. Specifically still unobserved: that the preflight
+and the real request pair up correctly in a browser, and — carried from phase 6
+§7 item 2 — that the `SameSite=Strict` cookie is replayed cross-port at all.
+Three page loads would close both.
+
+## 6. Still open
+
+Unchanged from the previous entry: the providers endpoint, the browser pass, and
+the absence of any CI. This change adds nothing new to that list.

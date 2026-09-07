@@ -1,12 +1,9 @@
 package com.headheartfrees.common.web;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -31,10 +28,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDeniedHandler {
 
-    private final ObjectMapper objectMapper;
+    private final ApiErrorWriter errorWriter;
 
-    SecurityErrorHandler(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+    SecurityErrorHandler(ApiErrorWriter errorWriter) {
+        this.errorWriter = errorWriter;
     }
 
     /** No credentials, or credentials that did not authenticate. */
@@ -71,11 +68,10 @@ public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDen
 
         // The exception itself is not logged: an unauthenticated request to a
         // protected path is normal traffic, not a fault.
-        response.setStatus(status.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        objectMapper.writeValue(
-                response.getOutputStream(),
-                ApiErrorResponse.of(status.value(), code, message, request.getRequestURI()));
+        //
+        // Serialisation moved to ApiErrorWriter when CsrfHeaderFilter became a
+        // second filter-chain rejection needing the same shape. Behaviour here
+        // is unchanged; the copy is not.
+        errorWriter.write(request, response, status, code, message);
     }
 }

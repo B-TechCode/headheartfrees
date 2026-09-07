@@ -83,7 +83,23 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const { method = "GET", body, signal, accessToken } = options;
 
-  const headers: Record<string, string> = { Accept: "application/json" };
+  // Sent on every request, from here and nowhere else.
+  //
+  // The backend requires it on POST /api/v1/auth/refresh and /logout: those are
+  // state-changing and authenticated only by the httpOnly refresh cookie, which
+  // the browser attaches by itself, so a cross-site page could otherwise cause
+  // one. A cross-site <form> cannot set a header, and setting this one from
+  // script costs a CORS preflight against the origin allowlist.
+  //
+  // It rides along on the unguarded calls too, deliberately. The alternative is
+  // a per-path rule here that has to stay in step with CsrfHeaderFilter, and
+  // the cost of sending it everywhere is nothing: /api/v1/vent/** neither
+  // requires it nor rejects it, so rule 2.2 is untouched and any other client
+  // still works with no ceremony.
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "X-Requested-With": "fetch",
+  };
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
   }

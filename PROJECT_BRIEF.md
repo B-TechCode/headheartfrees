@@ -155,8 +155,8 @@ GET    /api/v1/health                 → { status, version, time }   (public, l
 
 POST   /api/v1/auth/register          { email, password, displayName }
 POST   /api/v1/auth/login             { email, password }
-POST   /api/v1/auth/refresh           (refresh cookie)
-POST   /api/v1/auth/logout
+POST   /api/v1/auth/refresh           (refresh cookie + X-Requested-With: fetch)
+POST   /api/v1/auth/logout            (refresh cookie + X-Requested-With: fetch)
 GET    /api/v1/auth/me                (authenticated)
 GET    /oauth2/authorization/google    Google sign-in entry point
 
@@ -180,6 +180,37 @@ Rate limits: 5/min on auth endpoints per IP, 3/hour on feedback per IP,
 > breaking the same brief that asked for it, so it is removed rather than left
 > specified. `totalReleases` is a real count and is the only figure this endpoint
 > returns.
+
+**`POST /api/v1/auth/refresh` and `POST /api/v1/auth/logout` require an
+`X-Requested-With: fetch` request header.** Without it they return `403` with
+code `CSRF_HEADER_REQUIRED`, and nothing is rotated, spent or revoked.
+
+Those two are the only endpoints whose sole credential is the `hhf_refresh`
+cookie, which the browser attaches by itself — so a cross-site page could
+otherwise cause a signed-in visitor's browser to call one. It cannot read the
+response, but it does not need to: signing someone out is the whole attack, and
+a forced rotation would make the next legitimate refresh present a spent token
+and trip reuse detection, revoking the entire family. A cross-site `<form>`
+cannot set a header, and setting one from script requires clearing a CORS
+preflight against the origin allowlist first, so the requirement is the check.
+
+The header is therefore also in `Access-Control-Allow-Headers`; without that the
+preflight fails and a browser never sends the real request at all.
+
+Deliberately **not** required anywhere else:
+
+- `/register` and `/login` carry the credential in the body, so forging one
+  gains an attacker nothing they could not do by calling the endpoint directly.
+- `/api/v1/vent/**` must stay callable by any client with no ceremony
+  (rule 2.2), and has no session to forge.
+- `/me` is a read, authenticated by a Bearer token that script must attach
+  deliberately.
+
+This is a second lock, not the only one: the cookie is `SameSite=Strict`, which
+already blocks the attack in a current browser. It is here because that `Strict`
+is conditional — section 5 records that a move to different registrable domains
+forces `SameSite=None; Secure`, and on that day this header is the only thing
+left holding the door.
 
 Every error response uses one consistent shape:
 `{ timestamp, status, code, message, path, fieldErrors? }`

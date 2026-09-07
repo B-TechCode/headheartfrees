@@ -28,7 +28,7 @@ class AuthLogoutIT extends AuthTestSupport {
         MvcResult login = registerAndLogin(EMAIL);
         Cookie cookie = refreshCookieOf(login);
 
-        mockMvc.perform(post("/api/v1/auth/logout").cookie(cookie))
+        mockMvc.perform(guardedPost("/api/v1/auth/logout").cookie(cookie))
                 .andExpect(status().isNoContent());
 
         assertThat(refreshTokens.findAll())
@@ -36,7 +36,7 @@ class AuthLogoutIT extends AuthTestSupport {
                         + "kept a copy must not be able to refresh with it.")
                 .allMatch(RefreshToken::isRevoked);
 
-        mockMvc.perform(post("/api/v1/auth/refresh").cookie(cookie))
+        mockMvc.perform(guardedPost("/api/v1/auth/refresh").cookie(cookie))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -45,7 +45,7 @@ class AuthLogoutIT extends AuthTestSupport {
     void logoutClearsTheCookie() throws Exception {
         MvcResult login = registerAndLogin(EMAIL);
 
-        MvcResult result = mockMvc.perform(post("/api/v1/auth/logout")
+        MvcResult result = mockMvc.perform(guardedPost("/api/v1/auth/logout")
                         .cookie(refreshCookieOf(login)))
                 .andExpect(status().isNoContent())
                 .andReturn();
@@ -63,12 +63,12 @@ class AuthLogoutIT extends AuthTestSupport {
     @DisplayName("logout revokes every token in the family, not only the one presented")
     void logoutRevokesTheWholeFamily() throws Exception {
         MvcResult login = registerAndLogin(EMAIL);
-        MvcResult rotated = mockMvc.perform(post("/api/v1/auth/refresh")
+        MvcResult rotated = mockMvc.perform(guardedPost("/api/v1/auth/refresh")
                         .cookie(refreshCookieOf(login)))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        mockMvc.perform(post("/api/v1/auth/logout").cookie(refreshCookieOf(rotated)))
+        mockMvc.perform(guardedPost("/api/v1/auth/logout").cookie(refreshCookieOf(rotated)))
                 .andExpect(status().isNoContent());
 
         assertThat(refreshTokens.findAll())
@@ -82,13 +82,13 @@ class AuthLogoutIT extends AuthTestSupport {
         // Signing out when already signed out is not an error worth reporting,
         // and a 4xx here would make the frontend's sign-out path conditional
         // for no reason.
-        mockMvc.perform(post("/api/v1/auth/logout")).andExpect(status().isNoContent());
+        mockMvc.perform(guardedPost("/api/v1/auth/logout")).andExpect(status().isNoContent());
     }
 
     @Test
     @DisplayName("logout with an unknown token is 204 and says nothing")
     void logoutWithUnknownToken() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/logout")
+        mockMvc.perform(guardedPost("/api/v1/auth/logout")
                         .cookie(new Cookie(RefreshCookie.NAME, "never-issued")))
                 .andExpect(status().isNoContent());
     }
@@ -102,7 +102,7 @@ class AuthLogoutIT extends AuthTestSupport {
         Cookie cookie = refreshCookieOf(login);
 
         for (int i = 0; i < 10; i++) {
-            mockMvc.perform(post("/api/v1/auth/logout").cookie(cookie))
+            mockMvc.perform(guardedPost("/api/v1/auth/logout").cookie(cookie))
                     .andExpect(status().isNoContent());
         }
     }

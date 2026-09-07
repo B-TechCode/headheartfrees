@@ -3437,3 +3437,194 @@ Three page loads would close both.
 
 Unchanged from the previous entry: the providers endpoint, the browser pass, and
 the absence of any CI. This change adds nothing new to that list.
+
+---
+
+# Phase 7 — Feedback
+
+**Completed:** 2026-09-07
+**Scope:** PROJECT_BRIEF.md §9 row 7 — submission, public list, moderation
+endpoints, admin queue UI. Closes the `/admin/feedback` 404 the avatar menu has
+linked to since phase 6.
+
+---
+
+## 1. The rule this phase could have broken
+
+Feedback is stored. Vent text is not. Nothing may connect the two.
+
+There is no foreign key, no shared identifier, and no column in `feedback` that
+refers to `vent_events`. `ModuleBoundaryArchitectureTest` now fails the build if
+either package so much as imports a type from the other, in either direction.
+
+**The non-obvious half is the timestamp.** The form lives on `/vent/released`,
+so in the ordinary case a submission lands a minute or two after a release. Two
+tables with full-precision `created_at` would pair them for anyone holding a
+dump — a release at 14:32:10 and a note at 14:33:45, at this site's traffic, is
+one person. So `feedback.created_at` is **truncated to the hour on write**, and
+the public endpoint returns no timestamp at all.
+
+Verified on the running stack: a note submitted at 10:22 stored as
+`2026-09-07T10:00:00Z`.
+
+The cost is real and was accepted deliberately: "submitted 3 minutes ago" does
+not exist, and two notes in the same hour have no defined order between them.
+`moderated_at` keeps full precision — it records a moderator acting on their own
+queue, not a visitor arriving, so there is nothing to correlate it against.
+
+## 2. Decisions
+
+**Message floor is 10, not 20.** The instruction suggested 20. "Thank you." is
+ten characters and "This helped a lot." is nineteen, and on this page those are
+the likeliest honest answers. A floor that rejects them is set against the
+users.
+
+**`<3` is allowed.** Markup is rejected rather than sanitised, as instructed,
+but the rule is tag-shaped `<` only — a bracket followed by a letter, slash,
+bang or question mark — plus HTML entities, so `&lt;script&gt;` cannot be
+smuggled past for something downstream to decode. Rejecting every `<` would have
+been simpler and would have failed people writing the most common affectionate
+thing there is, on a site about feelings.
+
+**Location refuses commas.** One place, 60 characters, one line, with the
+placeholder (`Mumbai`) teaching the format. The comma rule is what stops the
+field becoming an address assembled next to somebody's name on a public page.
+Both name and location carry a notice, beside the fields rather than in the
+preamble, saying they are published — a form field is assumed private until it
+says otherwise, and someone filling one in has stopped reading the intro.
+
+**The display name is prefilled in the browser, not on the server.** It keeps
+`feedback` free of any dependency on `auth` (§4), and it means renaming an
+account later cannot rewrite a name already published under the old one. It also
+makes "signed in does not mean attributed" structural: an empty field posts an
+anonymous note from an authenticated request, and the row still records
+`user_id` so a removal request can be matched.
+
+**Reversals are last-write, not history.** `moderated_at` and `moderated_by` are
+overwritten on each decision. **If reversals ever need a history rather than a
+last write, that is a `feedback_moderation_events` table**, appended to per
+decision, and this is the note saying so. Today the queue answers "who published
+this, and when", which is what the Community Guidelines removal promise
+requires.
+
+## 3. The first `@PreAuthorize`, and a finding about testing it
+
+`AdminFeedbackController` carries the project's first method security, closing
+the phase 5 open item. `AdminFeedbackAuthorisationIT` pins all three outcomes:
+anonymous **401**, authenticated USER **403**, ADMIN **200**.
+
+The instruction also asked for a test asserting an anonymous
+`GET /api/v1/admin/feedback` returns 401 "so the ordering can't silently
+regress". That test was written — and **it does not do that job**, which was
+found by trying it rather than assuming it.
+
+The exact regression was simulated: `/api/v1/**` added to `PUBLIC_PATHS` *and*
+the admin matcher moved below it. **All six tests still passed.** They passed
+because `@PreAuthorize` caught the request after the filter chain let it
+through. That is the belt-and-braces design working correctly, and it is
+genuinely reassuring — one mistake is not a breach. It also means no
+request-level test can tell the two layers apart, so none can notice when one
+silently stops contributing.
+
+`AdminPathsAreNotPublicTest` closes it properly: a plain unit test asserting
+that no pattern in `PUBLIC_PATHS` matches an admin URL, whatever order the
+matchers are declared in. Against the simulated regression it fails with
+`Public path "/api/v1/**" matches admin URL "/api/v1/admin/feedback"`. Both
+locks are now independently guarded.
+
+## 4. The moderation screen
+
+It shows unfiltered writing from strangers on a mental-health site, and whoever
+reviews it may read a lot in one sitting. One at a time by default: a compact
+list of `<details>` rows, each showing a rating and a one-line clamped preview,
+with the full note only when opened. Nothing polls, nothing animates in, nothing
+arrives mid-read.
+
+**The helplines are worded for the moderator**, not for the person who wrote in.
+The visitor-facing framing would be worse than useless here because it implies
+the moderator could pass them on, and they cannot — submissions carry no contact
+details of any kind, by design. The panel says that plainly: you cannot reply,
+some of this will stay with you, that is an ordinary response to the work, and
+these lines are open to you too.
+
+## 5. Verification actually run
+
+`mvn verify` — **48 unit + 106 integration, 0 failures** (46 + 81 before).
+`npm test` — **59 passing** (49 before). `npm run build`, `npm run lint`,
+`npm run typecheck` all clean; 19 static pages, `/voices` and `/admin/feedback`
+both generated.
+
+> `./mvnw` cannot run: `.mvn/wrapper/` holds only `maven-wrapper.properties`,
+> with no `maven-wrapper.jar`, so the wrapper dies with a classworlds launcher
+> error. `mvn` from the PATH was used instead. **The wrapper is broken for
+> anyone cloning this repo** and phase 9 should fix it.
+
+Guards were checked against their own removal rather than watched to pass:
+
+| Mutation | Result |
+| --- | --- |
+| `/api/v1/**` public + admin matcher moved below it | `AdminPathsAreNotPublicTest` fails, naming the pattern; the six IT tests do **not** (see §3) |
+| accessible names removed from the rating radios | 3 of 6 `RatingInput` tests fail |
+
+Then against the running stack, `docker compose up -d --build`:
+
+| Check | Result |
+| --- | --- |
+| anonymous submission | **201**, stored PENDING, `user_id` null |
+| does it appear on `/voices`? | **no** — `items: []` |
+| approve as ADMIN | **200**, status APPROVED, `moderated_by` set to the moderator's id |
+| does it appear now? | **yes**, carrying only rating/message/name/location |
+| reject | **200** — gone from `/voices`, row retained in the queue as REJECTED |
+| signed-in USER on the admin endpoints | **403 FORBIDDEN**, not 401 |
+| anonymous on the admin endpoints | **401 UNAUTHORIZED** |
+| 4th submission in an hour | **429 RATE_LIMITED** with `Retry-After` |
+| `/vent`, `/vent/released`, `/voices` signed out | **200** each |
+| `POST /vent/release` with no account and no header | **204**; stats **200** |
+| `created_at` as stored | `2026-09-07T10:00:00Z` for a 10:22 submission — truncation confirmed |
+
+The ADMIN used the documented bootstrap path — register, set
+`APP_ADMIN_BOOTSTRAP_EMAILS`, restart — and the log line
+`Promoted account f6cb6d35… to ADMIN` confirms it. **The variable was reverted
+to empty afterwards, but `mod@example.com` remains ADMIN in the local dev
+database**, because the promotion is persisted and clearing the variable does
+not demote. That account and the test rows are dev-only artifacts.
+
+## 6. NOT verified
+
+1. **No browser was driven, again.** This is the fourth phase in a row carrying
+   this gap and it is now the largest thing wrong with this project's process.
+   Everything below follows from it.
+2. **No breakpoint check at any width.** 320, 375, 414, 768, 1024, 1440 and 1920
+   are all unverified. Highest risk: the two-across name/location row at its
+   `sm` threshold, the queue row's truncated preview at 320, and the star row
+   with 44px tap targets at 320, where five of them plus padding is most of the
+   viewport.
+3. **The rating control has never been operated by a real keyboard or a real
+   screen reader.** `RatingInput.test.tsx` proves it is built from named native
+   radios in a fieldset — the structure that makes the announcement correct, and
+   the thing a button row fails — but jsdom has no accessibility tree and no
+   real focus model. The arrow-key test exercises Testing Library's synthetic
+   events, not the browser's radio-group behaviour. This is exactly the failure
+   the instruction called out, and it remains open.
+4. **No visual review.** Nobody has looked at `/voices`, the invitation on
+   `/vent/released`, or the queue.
+5. **The empty state has been seen only as JSON.** `/voices` returns 200 and the
+   list is empty; nobody has watched the page render that.
+6. **Concurrent moderation is untested.** Two moderators PATCHing the same row
+   race, and last-write-wins is assumed rather than asserted.
+7. **`npm audit` still reports the pre-existing postcss advisories** reached
+   through `next`. Unchanged by this phase; phase 9's call.
+
+## 7. Still open
+
+1. **The browser pass**, carried forward and now four phases old. Items 2–5
+   above are one session's work.
+2. **`GET /api/v1/auth/providers`** to delete `NEXT_PUBLIC_GOOGLE_SIGN_IN`.
+3. **No CI.** Both suites pass locally and nothing runs them anywhere else.
+4. **`./mvnw` is broken** — missing wrapper jar. See §5.
+5. **A moderation history table**, if reversals ever need more than a last
+   write. See §2.
+6. `/support` still 404s (phase 8). The contact address is still a placeholder.
+   Helpline re-verification cadence still undecided. Privacy policy still needs
+   legal review. The Hinglish safety list still needs a native speaker. Refresh
+   token pruning still has no job.

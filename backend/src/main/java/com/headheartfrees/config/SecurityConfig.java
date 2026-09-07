@@ -12,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
@@ -33,6 +34,14 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  */
 @Configuration
 @EnableWebSecurity
+/*
+ * Method security is on from phase 7, for AdminFeedbackController's
+ * @PreAuthorize. It is a second, independent check rather than a replacement
+ * for the path rule above: the annotation guards the methods even if a future
+ * refactor moves or renames the URL, and the path rule guards the URL even if
+ * somebody removes the annotation.
+ */
+@EnableMethodSecurity
 public class SecurityConfig {
 
     /** Paths that must stay reachable without an account. */
@@ -46,6 +55,12 @@ public class SecurityConfig {
         // Register, login and refresh must be reachable by someone with no
         // token. /me is deliberately absent - it is the one auth endpoint that
         // requires authentication.
+        // Submitting a note and reading the approved wall. Both public:
+        // submission is optional and anonymous submission is allowed, so the
+        // release flow never requires an account. NOTE these are the exact
+        // paths, not /api/v1/feedback/** - the admin queue lives under
+        // /api/v1/admin/feedback and must not be caught by a wildcard here.
+        "/api/v1/feedback",
         "/api/v1/auth/register",
         "/api/v1/auth/login",
         "/api/v1/auth/refresh",
@@ -90,6 +105,18 @@ public class SecurityConfig {
                 .logout(logout -> logout.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // ORDER MATTERS, and this line must stay first.
+                        //
+                        // Spring Security applies the first matcher that
+                        // matches, so a broad public entry placed above this
+                        // would make the moderation queue world-readable while
+                        // every test that only checks the happy path kept
+                        // passing. Declaring the restriction before any
+                        // permitAll means a future wildcard cannot silently
+                        // open it. AdminFeedbackAuthorisationIT asserts an
+                        // anonymous GET here is 401 so the ordering cannot
+                        // regress unnoticed.
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers(PUBLIC_PATHS).permitAll()
                         .anyRequest().authenticated())
                 // Reads the Bearer token and populates the context. Placed

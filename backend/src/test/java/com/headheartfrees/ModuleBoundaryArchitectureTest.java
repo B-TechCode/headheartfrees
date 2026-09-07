@@ -39,6 +39,7 @@ class ModuleBoundaryArchitectureTest {
 
     private static final String AUTH = "com.headheartfrees.auth..";
     private static final String VENT = "com.headheartfrees.vent..";
+    private static final String FEEDBACK = "com.headheartfrees.feedback..";
 
     /**
      * Both packages, imported together. Importing only one would make every
@@ -93,5 +94,51 @@ class ModuleBoundaryArchitectureTest {
                         + "Reference other domains by ID, never by association.");
 
         rule.check(CLASSES);
+    }
+
+    @Test
+    @DisplayName("nothing in feedback may depend on anything in auth")
+    void feedbackDoesNotDependOnAuth() {
+        // Phase 7. `feedback.user_id` is a bare UUID with a database foreign
+        // key and no JPA association, the same shape as refresh_tokens - so
+        // the module can be lifted out with its table and nothing in it needs
+        // an auth type to compile.
+        //
+        // The tempting violation is real and specific: "default the display
+        // name from the account" reads like a reason to inject a user
+        // repository here. It is not. The client sends the name it already
+        // holds from the session, which keeps this boundary intact AND makes
+        // "signed in does not mean attributed" structural rather than a
+        // policy somebody can forget.
+        ArchRule rule = noClasses()
+                .that().resideInAPackage(FEEDBACK)
+                .should().dependOnClassesThat().resideInAPackage(AUTH)
+                .because("PROJECT_BRIEF.md section 4: feedback references users by ID only. "
+                        + "Reading users.display_name here would couple the modules and would "
+                        + "rewrite already-published names when an account is renamed.");
+
+        rule.check(CLASSES);
+    }
+
+    @Test
+    @DisplayName("nothing in feedback may depend on anything in vent, or the reverse")
+    void feedbackAndVentCannotSeeEachOther() {
+        // The rule this phase could most easily break. Feedback is stored and
+        // vent text is not, and the two must stay unlinkable even to someone
+        // holding the database. An import in either direction is the first
+        // step towards a correlation that the brief forbids outright.
+        noClasses()
+                .that().resideInAPackage(FEEDBACK)
+                .should().dependOnClassesThat().resideInAPackage(VENT)
+                .because("A feedback row and a vent row must remain unlinkable. Nothing in "
+                        + "feedback may see a vent type.")
+                .check(CLASSES);
+
+        noClasses()
+                .that().resideInAPackage(VENT)
+                .should().dependOnClassesThat().resideInAPackage(FEEDBACK)
+                .because("A feedback row and a vent row must remain unlinkable. Nothing in "
+                        + "vent may see a feedback type.")
+                .check(CLASSES);
     }
 }

@@ -64,6 +64,30 @@ export interface ApiRequestOptions {
    * is never in localStorage or a cookie.
    */
   accessToken?: string | null;
+  /**
+   * Set `false` for a request that must not be cancellable.
+   *
+   * When false, any `signal` passed in is **dropped** before it reaches
+   * `fetch`, so nothing tied to a component lifetime can abort the request
+   * partway.
+   *
+   * This is forward-looking rather than a fix for a live bug: nothing in this
+   * codebase currently constructs an `AbortController` or passes a signal, so
+   * today there is nothing to drop. It exists because the two calls that use
+   * it have the same shape — the component that starts them unmounts as a
+   * direct result of them succeeding — and both fail badly and silently if
+   * cut short:
+   *
+   * - **logout**: the client looks signed out while the refresh token stays
+   *   live on the server.
+   * - **feedback submission**: the note silently vanishes. Someone who has
+   *   just written something and pressed send is told it worked, and it is
+   *   nowhere.
+   *
+   * A submission that errors is recoverable. One that evaporates is not, and
+   * on this site it happens directly after the person let something go.
+   */
+  abortable?: boolean;
 }
 
 /**
@@ -81,7 +105,13 @@ export async function apiFetch<T>(
   path: string,
   options: ApiRequestOptions = {},
 ): Promise<T> {
-  const { method = "GET", body, signal, accessToken } = options;
+  const { method = "GET", body, signal, accessToken, abortable = true } = options;
+
+  // Dropped rather than merely ignored. If a caller ever passes an
+  // effect-scoped signal to a request marked unabortable, the correct outcome
+  // is that the request completes, not that it quietly inherits a cancellation
+  // it asked to be exempt from.
+  const effectiveSignal = abortable ? signal : undefined;
 
   // Sent on every request, from here and nowhere else.
   //
@@ -112,7 +142,7 @@ export async function apiFetch<T>(
     credentials: "include",
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
-    ...(signal ? { signal } : {}),
+    ...(effectiveSignal ? { signal: effectiveSignal } : {}),
   });
 
   if (!response.ok) {

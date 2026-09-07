@@ -368,7 +368,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     try {
-      await apiFetch<void>("/api/v1/auth/logout", { method: "POST" });
+      // abortable: false - this must not be cancellable. Signing out unmounts
+      // its own trigger, and a logout cut short leaves the client looking
+      // signed out while the refresh token stays live on the server.
+      await apiFetch<void>("/api/v1/auth/logout", { method: "POST", abortable: false });
     } catch (error) {
       // A 401 means the server has no session for this cookie - already
       // expired, already revoked, or never valid. There is nothing left on the

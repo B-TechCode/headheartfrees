@@ -223,6 +223,7 @@ Every error response uses one consistent shape:
 /                 Home
 /vent             The writing space (public, no auth)
 /vent/released    Thank-you + feedback form + optional deeper share
+/voices           Published notes from people who used the site (public)
 /about            Mission, principles, and the donation section
 /support          Donation page
 /login, /register Auth pages
@@ -230,9 +231,24 @@ Every error response uses one consistent shape:
 ```
 
 ### Navbar
-`Home · Vent · About` on the left of centre, and on the right either
+`Home · Vent · Voices · About` on the left of centre, and on the right either
 **Sign in** or the user's avatar menu. **Donate and Feedback must not appear in the
 navbar** — the old design had them and they must not reappear.
+
+> **`Voices` added 2026-09-07 (phase 7).** This previously read
+> `Home · Vent · About`, and the fourth item was added only once there was a
+> page behind it — `/voices` reads real submitted notes from
+> `GET /api/v1/feedback` and shows an honest empty state until there are some.
+> It is **not** an exception to the rule above: that rule is about Donate and
+> Feedback, which ask the reader for something. Voices is a page of what other
+> people wrote. Nothing that solicits money or a review may be added here.
+
+> **Note on provenance.** The phase 7 instruction described this as "the Phase 2
+> decision — the fourth item, added when it has something behind it". No such
+> decision exists in PHASE_LOG: phase 2 recorded the navbar as
+> `Home/Vent/About + Sign in` and nothing anywhere reserved a fourth slot. The
+> change was made because it was asked for and is sound, and the amendment is
+> recorded here rather than left as an undocumented divergence from §7.
 
 ### Footer
 The crisis helpline strip, a brand blurb, a Support column (Crisis Resources,
@@ -253,6 +269,17 @@ anywhere in the footer either.
    textarea. Navigate to `/vent/released`.
 3. `/vent/released` — the thank-you message, then the feedback form (rating + message,
    name and location optional). This posts to `/api/v1/feedback` and **is** stored.
+   The form is **collapsed behind one line and one link**, below "Write something
+   else", and never blocks it. A form sitting open here, seconds after a release,
+   reads as the price of using the site. It states on its face that submissions
+   are reviewed before publication and that nothing from the vent box is attached
+   to them — people assume the two are connected unless told otherwise.
+
+   **A feedback row and a vent row must remain unlinkable, including by
+   timestamp.** `feedback.created_at` is therefore stored truncated to the hour;
+   full precision would pair a release at 14:32 with a note at 14:34 for anyone
+   holding the database. There is no foreign key, no shared identifier, and the
+   public endpoint returns no timestamp at all.
 4. Below the feedback form, a quiet secondary option: *"Want to tell us more about what
    you're going through?"* linking to a longer optional form. This is separate from
    feedback and its content is not stored in our database.

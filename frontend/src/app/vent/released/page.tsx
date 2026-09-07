@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { FeedbackInvitation } from "@/components/sections/FeedbackInvitation";
 import { cn } from "@/lib/cn";
 import { focusRing } from "@/components/ui/styles";
 
@@ -18,11 +19,11 @@ export const metadata: Metadata = {
  *   releases" shown to someone who has just let go of something reads as
  *   "nobody else is here" — the opposite of what this page is for. Revisited
  *   when the number means something.
- * - **The feedback form.** It posts to `/api/v1/feedback`, which is phase 7.
- *   A form that posts nowhere would be worse than no form, particularly on this
- *   page, where someone submitting into a void would reasonably conclude the
- *   site had swallowed their words. The slot below is where it lands, and the
- *   surrounding layout will not need redesigning for it.
+ * - **The feedback form, open by default.** Phase 7 added it, collapsed behind
+ *   one line and one link. `/api/v1/feedback` exists now, so it no longer posts
+ *   into a void - but the reason it stays shut until asked for is unchanged and
+ *   is about this page rather than the endpoint: a rating control waiting with
+ *   a cursor in it, seconds after someone let something go, reads as a toll.
  * - **Anything they wrote.** There is nothing to show. It was never sent, and
  *   the component holding it has unmounted.
  *
@@ -76,11 +77,13 @@ export default function ReleasedPage() {
       </div>
 
       {/*
-        Phase 7 drops the feedback form in here: heading, rating, message, and
-        the optional name and location fields. The spacing and the rule above it
-        are already right for it, so adding it is an insertion rather than a
-        redesign.
+        The feedback invitation, phase 7. Below "Write something else" on
+        purpose: the primary action on this page is going back to the box, and
+        nothing here may compete with it or block it. Collapsed to one sentence
+        and one link until someone chooses otherwise - a form sitting open here,
+        seconds after a release, would read as the price of using the site.
       */}
+      <FeedbackInvitation />
 
       <p className="mt-16 border-t border-rule pt-6 max-w-[60ch] text-body-sm text-ink-soft">
         This runs on a small server and stays free.{" "}

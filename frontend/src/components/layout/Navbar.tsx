@@ -24,6 +24,14 @@ import type { UserSummary } from "@/lib/auth/types";
 const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/vent", label: "Vent" },
+  // Added in phase 7, when there was something behind it. PROJECT_BRIEF.md §7
+  // listed three items; the amendment is recorded there with a date, the same
+  // way the /vent/stats correction and the footer's Navigate column were.
+  //
+  // The prohibition above is unchanged and is not about this: Donate and
+  // Feedback must never appear here. /voices is neither - it is a page of what
+  // other people wrote, not a request aimed at the reader.
+  { href: "/voices", label: "Voices" },
   { href: "/about", label: "About" },
 ] as const;
 

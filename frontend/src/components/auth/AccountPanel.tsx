@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
 import { focusRing } from "@/components/ui/styles";
 import { useSession } from "@/lib/auth/SessionProvider";
+import { describeAuthError } from "@/lib/auth/errors";
 import type { UserSummary } from "@/lib/auth/types";
 
 /**
@@ -54,6 +55,7 @@ export function AccountPanel({ user: initialUser }: { user: UserSummary }) {
   const router = useRouter();
   const [user, setUser] = useState(initialUser);
   const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,11 +100,26 @@ export function AccountPanel({ user: initialUser }: { user: UserSummary }) {
           loadingLabel="Signing out"
           onClick={() => {
             setSigningOut(true);
-            void signOut().then(() => router.push("/"));
+            setSignOutError(null);
+            // Only navigate when the server actually revoked the family. On a
+            // failure the session is still live, so this stays put, re-enables
+            // the button and says so rather than showing a signed-out site.
+            void signOut().then(
+              () => router.push("/"),
+              (error: unknown) => {
+                setSigningOut(false);
+                setSignOutError(describeAuthError(error));
+              },
+            );
           }}
         >
           Sign out
         </Button>
+        {signOutError !== null ? (
+          <p role="alert" className="mt-3 max-w-prose text-body-sm text-danger">
+            You are still signed in — sign-out did not complete. {signOutError}
+          </p>
+        ) : null}
       </div>
 
       <p className="mt-10 max-w-prose text-body-sm text-ink-soft">

@@ -88,6 +88,17 @@ interface SessionContextValue {
   user: UserSummary | null;
   /** @throws {ApiError} on bad credentials, a weak-password rejection, or 429. */
   signIn(email: string, password: string): Promise<void>;
+  /**
+   * Ends the session on the server, then locally.
+   *
+   * @throws on any failure that leaves the server-side token possibly live -
+   *         offline, 5xx, 429. **The local session is NOT cleared in that
+   *         case**, so a caller must surface the failure and offer a retry
+   *         rather than navigating away. Resolving quietly here would show a
+   *         signed-out interface over a live session, which on a shared
+   *         computer is the worst outcome this flow has. A 401 is not a
+   *         failure: the server already has no session, so it resolves.
+   */
   signOut(): Promise<void>;
   /**
    * Calls the API as the signed-in user.
@@ -358,11 +369,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     try {
       await apiFetch<void>("/api/v1/auth/logout", { method: "POST" });
-    } catch {
-      // Best effort, and deliberately swallowed. The server revokes the token
-      // family; if that call fails, the local session still has to end. A
-      // "sign out" that leaves someone apparently signed in because the network
-      // hiccupped is the one outcome that is never acceptable here.
+    } catch (error) {
+      // A 401 means the server has no session for this cookie - already
+      // expired, already revoked, or never valid. There is nothing left on the
+      // server to revoke, so ending it locally is the correct and complete
+      // outcome, not a failure.
+      if (!isUnauthorised(error)) {
+        // Everything else - offline, 500, 429, a refused preflight - leaves
+        // the refresh token possibly still live on the server. This used to
+        // swallow the error and clear the session anyway, on the reasoning
+        // that a sign-out must always end the local session. That reasoning is
+        // wrong, and dangerously so: it renders a signed-out interface over a
+        // session that still exists. Someone on a shared computer who is shown
+        // "Sign in" walks away believing they are out, and the refresh cookie
+        // in that browser still buys a full session for thirty days.
+        //
+        // Failing loudly is worse UX and better security, and the caller is
+        // expected to say so and offer a retry. The local session is left
+        // intact deliberately: it is the honest description of the server's
+        // state, and it keeps the retry able to work.
+        throw error;
+      }
     }
     endSession({ keepHint: false });
   }, [endSession]);

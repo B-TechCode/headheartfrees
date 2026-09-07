@@ -9,6 +9,7 @@ import { focusRing } from "@/components/ui/styles";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { useSession } from "@/lib/auth/SessionProvider";
 import { signInHref } from "@/lib/auth/sign-in-href";
+import { describeAuthError } from "@/lib/auth/errors";
 import type { UserSummary } from "@/lib/auth/types";
 
 /**
@@ -57,7 +58,25 @@ export function Navbar() {
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
-    <header className="app-layer border-b border-rule bg-surface">
+    // `z-20`, not the `z-1` that `.app-layer` alone would give it.
+    //
+    // `.app-layer` sets `position: relative; z-index: 1` on the header, on
+    // <main> and on the footer, to lift them off the paper-grain layer. That
+    // makes each one its own stacking context, and three siblings at the same
+    // z-index are painted in DOM order - so <main> lands on top of the header.
+    //
+    // The avatar dropdown is `absolute z-40` inside this header, and it hangs
+    // below the 64px header box into <main>'s area. `z-40` only orders it
+    // within the header's stacking context; it cannot lift it above a sibling
+    // of the header. <main> has no background of its own (the surface colour
+    // is on `body`), so the panel stayed visible while <main> took every click
+    // that landed on it - the menu shut via the outside-pointerdown handler and
+    // no handler ever ran. Sign out fired no request at all.
+    //
+    // Raising the header above <main> is what makes the panel's own z-index
+    // mean something. Anything > 1 works; 20 leaves room under the skip link's
+    // z-50 and reads as deliberate.
+    <header className="app-layer z-20 border-b border-rule bg-surface">
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6 lg:h-20 lg:px-8">
         <Link
           href="/"
@@ -205,6 +224,7 @@ export function Navbar() {
 function MobileAccountItems({ user }: { user: UserSummary }) {
   const { signOut } = useSession();
   const router = useRouter();
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   const itemClasses = cn(
     "flex min-h-12 w-full items-center rounded-md px-3 text-left",
@@ -234,13 +254,26 @@ function MobileAccountItems({ user }: { user: UserSummary }) {
         <button
           type="button"
           onClick={() => {
-            void signOut().then(() => router.push("/"));
+            setSignOutError(null);
+            // A failed sign-out must not navigate: the session is still live
+            // on the server, and "/" with a Sign in button would say otherwise.
+            void signOut().then(
+              () => router.push("/"),
+              (error: unknown) => setSignOutError(describeAuthError(error)),
+            );
           }}
           className={itemClasses}
         >
           Sign out
         </button>
       </li>
+      {signOutError !== null ? (
+        <li role="alert" className="px-3 pt-1 pb-2">
+          <p className="font-sans text-caption text-danger">
+            You are still signed in — sign-out did not complete. {signOutError}
+          </p>
+        </li>
+      ) : null}
     </>
   );
 }

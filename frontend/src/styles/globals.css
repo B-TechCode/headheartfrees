@@ -313,7 +313,23 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
   }
 
-  /* Every real page region sits above the grain. */
+  /*
+   * Every real page region sits above the grain.
+   *
+   * `z-index: 1` also makes each region its own STACKING CONTEXT, and that has
+   * bitten once already. Regions that carry this are siblings at the same
+   * z-index, so they paint in DOM order - header, then main, then footer - and
+   * a later sibling covers an earlier one. Anything absolutely positioned
+   * inside a region is trapped in that region's context: the avatar dropdown
+   * is `z-40` and still lost every click to <main>, because <main> is simply
+   * painted after the header. It stayed visible throughout, since <main> has
+   * no background of its own, which is what made it look like a dead button
+   * rather than a covered one.
+   *
+   * So: if a region needs to overflow visibly INTO a later sibling, give that
+   * region its own z-index above 1 as well (the header does - `z-20`). Adding
+   * `.app-layer` to a new region is not sufficient on its own.
+   */
   .app-layer {
     position: relative;
     z-index: 1;

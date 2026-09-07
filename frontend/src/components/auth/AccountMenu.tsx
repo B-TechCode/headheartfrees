@@ -6,6 +6,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { focusRing } from "@/components/ui/styles";
 import { useSession } from "@/lib/auth/SessionProvider";
+import { describeAuthError } from "@/lib/auth/errors";
 import type { UserSummary } from "@/lib/auth/types";
 
 /**
@@ -33,6 +34,7 @@ export function AccountMenu({ user }: { user: UserSummary }) {
 
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -127,7 +129,17 @@ export function AccountMenu({ user }: { user: UserSummary }) {
 
   const onSignOut = useCallback(async () => {
     setSigningOut(true);
-    await signOut();
+    setSignOutError(null);
+    try {
+      await signOut();
+    } catch (error) {
+      // The session is still live on the server, so the menu stays open, the
+      // avatar stays, and the person is told. Navigating to "/" here would
+      // show a signed-out header over a session that still exists.
+      setSigningOut(false);
+      setSignOutError(describeAuthError(error));
+      return;
+    }
     setOpen(false);
     // Home rather than staying put: the current page may be one that requires
     // an account, and RequireAuth would otherwise bounce them to /login with a
@@ -246,6 +258,22 @@ export function AccountMenu({ user }: { user: UserSummary }) {
             </button>
           </li>
         </ul>
+
+        {/*
+          Sign-out failed and the session is still live on the server.
+          `role="alert"` because this appears after an action the person took
+          and contradicts what they expect to have happened - it has to be
+          announced, not just drawn. The wording says the state plainly rather
+          than apologising: someone on a shared computer needs to know they are
+          still signed in, not that we are sorry.
+        */}
+        {signOutError !== null ? (
+          <div role="alert" className="border-t border-rule px-4 py-3">
+            <p className="font-sans text-caption text-danger">
+              You are still signed in — sign-out did not complete. {signOutError}
+            </p>
+          </div>
+        ) : null}
       </div>
     </div>
   );

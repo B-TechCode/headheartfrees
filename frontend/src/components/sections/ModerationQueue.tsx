@@ -42,13 +42,14 @@ type Filter = "PENDING" | "DECIDED";
  * implying an action that does not exist.
  */
 export function ModerationQueue() {
-  const { authFetch } = useSession();
+  const { authFetch, user } = useSession();
 
   const [items, setItems] = useState<QueuedFeedback[]>([]);
   const [filter, setFilter] = useState<Filter>("PENDING");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -90,6 +91,11 @@ export function ModerationQueue() {
       // Replace in place rather than refetching: the list does not jump, and
       // the moderator keeps their position in it.
       setItems((existing) => existing.map((item) => (item.id === id ? updated : item)));
+      // The buttons changing is the visible confirmation; this is the same
+      // information for someone who cannot see it happen.
+      setAnnouncement(
+        status === "APPROVED" ? "Published. It is now on Voices." : "Rejected. It is not public.",
+      );
     } catch (caught) {
       setError(describeAuthError(caught));
     } finally {
@@ -103,6 +109,15 @@ export function ModerationQueue() {
 
   return (
     <div className="mt-10">
+      {/*
+        Announced, not drawn. The visible confirmation is the decision line
+        appearing and the matching button going away; neither of those is
+        something a screen reader announces on its own.
+      */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
+
       <ModeratorSupport />
 
       {error !== null ? (
@@ -140,6 +155,7 @@ export function ModerationQueue() {
               <QueueRow
                 item={item}
                 busy={busyId === item.id}
+                viewerId={user?.id ?? null}
                 onDecide={(status) => void decide(item.id, status)}
               />
             </li>
@@ -244,10 +260,12 @@ function FilterTab({
 function QueueRow({
   item,
   busy,
+  viewerId,
   onDecide,
 }: {
   item: QueuedFeedback;
   busy: boolean;
+  viewerId: string | null;
   onDecide: (status: Decision) => void;
 }) {
   return (
@@ -295,34 +313,163 @@ function QueueRow({
           </div>
         </dl>
 
-        <div className="mt-5 flex flex-wrap gap-3">
-          <Button
-            variant="secondary"
-            loading={busy}
-            loadingLabel="Saving"
-            disabled={busy}
-            onClick={() => onDecide("APPROVED")}
-          >
-            {item.status === "APPROVED" ? "Approved" : "Approve"}
-          </Button>
-          <Button
-            variant="secondary"
-            loading={busy}
-            loadingLabel="Saving"
-            disabled={busy}
-            onClick={() => onDecide("REJECTED")}
-          >
-            {/*
-              "Take down" rather than "Reject" once something is live: the
-              action is different in kind, and Community Guidelines promise it
-              is possible.
-            */}
-            {item.status === "APPROVED" ? "Take it down" : "Reject"}
-          </Button>
+        <DecisionRecord item={item} viewerId={viewerId} />
+
+        {/*
+          ===================================================================
+          Only the action that would CHANGE something is offered
+          ===================================================================
+
+          Previously both buttons stayed put after a decision, identical apart
+          from a word. The only feedback was the badge, and a moderator
+          clicking "Reject" on an already-rejected item saw a request go out,
+          the same two buttons come back, and nothing else move — which reads
+          as broken, and led to the same item being rejected four times before
+          anyone realised the first click had worked.
+
+          So the button matching the current status is removed rather than
+          disabled. A disabled control still occupies the spot and still has to
+          be read to find out it is inert; an absent one says "done" by being
+          absent, and its disappearance is the confirmation the click landed.
+
+          The opposite action always remains. Reversal is deliberate — the
+          Community Guidelines promise that someone can ask for their words to
+          come down, and an approval that could not be undone would make that
+          promise unkeepable.
+        */}
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          {item.status !== "APPROVED" ? (
+            <Button
+              variant="secondary"
+              loading={busy}
+              loadingLabel="Saving"
+              disabled={busy}
+              onClick={() => onDecide("APPROVED")}
+            >
+              {/* "Publish it" once rejected: it is a reversal, not a first pass. */}
+              {item.status === "REJECTED" ? "Publish it after all" : "Approve"}
+            </Button>
+          ) : null}
+
+          {item.status !== "REJECTED" ? (
+            <Button
+              variant="secondary"
+              loading={busy}
+              loadingLabel="Saving"
+              disabled={busy}
+              onClick={() => onDecide("REJECTED")}
+            >
+              {/*
+                "Take it down" rather than "Reject" once something is live: the
+                action is different in kind, and so is how it feels to do.
+              */}
+              {item.status === "APPROVED" ? "Take it down" : "Reject"}
+            </Button>
+          ) : null}
         </div>
       </div>
     </details>
   );
+}
+
+/**
+ * Who decided this, and when.
+ *
+ * ===========================================================================
+ * Why this is on the screen at all
+ * ===========================================================================
+ *
+ * `moderated_at` and `moderated_by` have been stored since the table was
+ * created, and until now nothing rendered them — an audit trail that only
+ * exists in the database is an audit trail nobody can use. The reason the
+ * columns exist is so a moderator can answer "did I publish this, and when",
+ * which they will need when somebody writes in asking for their words to be
+ * taken down.
+ *
+ * ===========================================================================
+ * Why the moderator is an id, and sometimes "you"
+ * ===========================================================================
+ *
+ * The API returns `moderatedBy` as a bare UUID, and deliberately so: the
+ * feedback module may not read an auth type (PROJECT_BRIEF.md §4), so the
+ * endpoint does not join to `users` and there is no name to send.
+ *
+ * A raw UUID is close to useless to a person, so the one comparison that can
+ * be made in the browser is made here: if it matches the signed-in viewer, it
+ * says "you". That covers the common case — a single moderator asking what
+ * they did last week — without inventing a lookup the boundary forbids. With
+ * more than one moderator the id is still shown, which is honest about what is
+ * known rather than blank.
+ *
+ * The full timestamp is shown, not a relative one. "3 days ago" is the wrong
+ * shape for an audit record, and unlike `createdAt` this column keeps full
+ * precision: it records a moderator acting on their own queue, so there is
+ * nothing for it to be correlated against.
+ */
+function DecisionRecord({
+  item,
+  viewerId,
+}: {
+  item: QueuedFeedback;
+  viewerId: string | null;
+}) {
+  if (item.status === "PENDING" || item.moderatedAt === null) {
+    // Nothing has been decided, so there is nothing to record. An empty
+    // "Decided by: —" row would be noise on every item in the main queue.
+    return null;
+  }
+
+  const decidedByYou = viewerId !== null && item.moderatedBy === viewerId;
+
+  return (
+    <p className="mt-4 border-t border-rule pt-3 font-sans text-caption text-ink-soft">
+      <span className="font-medium text-ink">
+        {item.status === "APPROVED" ? "Published" : "Rejected"}
+      </span>{" "}
+      <time dateTime={item.moderatedAt}>{formatDecisionTime(item.moderatedAt)}</time>
+      {" · "}
+      {decidedByYou ? (
+        "by you"
+      ) : (
+        <>
+          by moderator{" "}
+          <span className="font-mono" title={item.moderatedBy ?? undefined}>
+            {shortId(item.moderatedBy)}
+          </span>
+        </>
+      )}
+    </p>
+  );
+}
+
+/**
+ * Date and time, in the reader's own locale.
+ *
+ * `undefined` as the locale rather than a hardcoded one: this only ever
+ * renders in a browser, behind `RequireAuth`, so there is no server render to
+ * disagree with and the moderator's own formatting is the right one.
+ */
+function formatDecisionTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "at an unknown time";
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/**
+ * The first segment of a UUID, with the whole thing in a `title`.
+ *
+ * Enough to tell two moderators apart at a glance without a 36-character
+ * string running through a caption line.
+ */
+function shortId(id: string | null): string {
+  if (id === null) return "unknown";
+  return id.split("-")[0] ?? id;
 }
 
 function StatusBadge({ status }: { status: FeedbackStatus }) {

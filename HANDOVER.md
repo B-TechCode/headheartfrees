@@ -212,13 +212,70 @@ from the spec rather than observed. `curl` has no concept of `SameSite`, so the
 HTTP-level checks in the phase 6 log do not cover it. **This is one page load
 and should be the first thing anyone does with this build.**
 
-### 3.5 The remaining Phase 9 items
+### 3.5 ~~The remaining Phase 9 items~~ — DONE 2026-09-08
 
-`PHASE_LOG.md` carries a running list. The significant ones: security headers,
-CORS lockdown for the production domain, disabling the Swagger UI in production,
-rate limiting behind a real reverse proxy (currently all users share one bucket
-behind Docker), a cleanup job for expired refresh tokens, and an accessibility
-audit.
+Every item that stood here is closed. For the record, and because this section
+previously listed them as blockers:
+
+| Was blocking | Now |
+|---|---|
+| Security headers | CSP, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`. Verified in a real browser across 14 routes, 0 violations. |
+| CORS lockdown | `APP_CORS_ALLOWED_ORIGINS`; the app **refuses to start** on a wildcard, a schemeless origin or a trailing slash. |
+| Swagger UI in production | `/v3/api-docs` and Swagger UI are off unless the `local` profile is active. Pinned by a test that boots on a non-local profile. |
+| Rate limiting behind a proxy | `X-Forwarded-For` honoured only from `APP_RATE_LIMIT_TRUSTED_PROXIES`, read right-to-left. **You must set this** — see 3.6. |
+| Refresh token cleanup | Hourly job, 30 days past expiry. |
+| Accessibility audit | Lighthouse/axe over all 14 routes: **100, zero failures**. |
+
+### 3.6 Set the trusted proxy address once you have a reverse proxy
+
+This is the one Phase 9 control that is **deliberately left switched off**,
+because only the owner knows their topology.
+
+`APP_RATE_LIMIT_TRUSTED_PROXIES` is empty by default. Empty means
+`X-Forwarded-For` is ignored and every caller behind the proxy shares one
+rate-limit bucket — so one person hitting the login limit locks out everybody.
+Set it to the proxy's own address and per-user limits start working.
+
+**Do not set it to a wildcard, and do not trust the header from anything else.**
+The app refuses a wildcard at startup. An unconditionally trusted
+`X-Forwarded-For` is worse than ignoring it: it is client-supplied, so anyone
+who wants to defeat the limiter sends a different value on every request.
+
+### 3.7 Turn HSTS on last, and understand that it is one-way
+
+`ENABLE_HSTS` is `false`, and the primary place for the header is your TLS
+terminator rather than the app.
+
+**Enabling it is close to irreversible for the length of `max-age`** — one year
+as configured. A browser that has seen the header refuses plain HTTP to this
+host until it expires, and there is no way to reach into someone's browser and
+retract it. So: get TLS working, confirm it, leave it working for a while, and
+only then turn this on. If a certificate problem happens afterwards, visitors
+are locked out rather than degraded.
+
+It is a **build-time** flag: `headers()` is resolved when Next builds, so
+changing it needs `docker compose build frontend`, not a restart.
+
+### 3.8 A dependency advisory you are inheriting
+
+`npm audit` reports 2 advisories (1 high) in **postcss**, reachable only as a
+transitive dependency of `next`:
+
+- XSS via an unescaped `</style>` in stringify output
+- Arbitrary `.map` file read via an attacker-controlled `sourceMappingURL`
+
+**Both are build-time paths, not runtime ones.** postcss runs when Tailwind
+compiles CSS during `npm run build`, on CSS this repository controls. Neither
+advisory is reachable by a visitor: no user input reaches postcss, and postcss
+is not in the runtime image at all — the standalone server bundle contains
+compiled CSS, not the compiler.
+
+**What it would take to close:** `npm audit fix --force` installs **Next 16**, a
+major version upgrade. That was deliberately not done in the final phase of the
+project, because a major Next upgrade changes routing, caching and build
+behaviour and there would be no time left to find what it broke. It is a
+contained, well-understood piece of work for whoever picks this up next, and it
+should be done deliberately with the suite green before and after.
 
 ---
 
@@ -323,7 +380,8 @@ be committed.
 | `SPRING_DATASOURCE_USERNAME` | |
 | `SPRING_DATASOURCE_PASSWORD` | |
 | `APP_CORS_ALLOWED_ORIGINS` | The real frontend origin. No wildcard — the refresh cookie needs credentialed CORS. |
-| `NEXT_PUBLIC_API_BASE_URL` | **Baked in at build time.** Changing it needs a frontend rebuild, not a restart. |
+| `NEXT_PUBLIC_API_BASE_URL` | **Baked in at build time.** Changing it needs a frontend rebuild, not a restart. It also feeds the CSP's `connect-src`, so a wrong value blocks every API call in the browser. |
+| `APP_RATE_LIMIT_TRUSTED_PROXIES` | Your reverse proxy's address. Empty means everyone behind it shares one rate-limit bucket. See 3.6. |
 
 ### Optional
 
@@ -372,11 +430,11 @@ Postgres is required — the backend will not start without it.
 
 ```
 cd backend
-./mvnw verify        # 116 tests. Needs Docker: Testcontainers runs a real
+./mvnw verify        # 180 tests. Needs Docker: Testcontainers runs a real
                      # PostgreSQL 16.
 
 cd frontend
-npm test             # 33 tests. Vitest + Testing Library + jsdom. No browser,
+npm test             # 74 tests. Vitest + Testing Library + jsdom. No browser,
                      # no backend, no Docker.
 npm run typecheck
 npm run lint

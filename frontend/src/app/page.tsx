@@ -20,10 +20,11 @@ export const metadata: Metadata = {
  * The Phase 2 placeholder that stood here is gone in full, including the
  * "API base URL" debug line. Nothing from it survives.
  *
- * One consequence worth knowing: that placeholder held the only link to
- * /design-system. The preview route still exists and still works, but it is now
- * reachable only by typing the URL. That is the right end state for an internal
- * tool Phase 9 deletes, but it does mean it will not be stumbled upon.
+ * That placeholder held the only link to /design-system, the internal preview
+ * of every primitive. Phase 9 deleted that route, as PROJECT_BRIEF.md §7 said
+ * it would: it existed to build the design system against, it shipped no
+ * product surface, and an internal tool left on a public origin is a page
+ * nobody maintains and everybody can read.
  */
 export default function HomePage() {
   return (

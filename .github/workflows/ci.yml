@@ -1,0 +1,174 @@
+name: CI
+
+# Runs the whole suite on every push and pull request.
+#
+# ===========================================================================
+# What this must not become
+# ===========================================================================
+#
+# The failure this project has hit repeatedly is a check that appears to run
+# and does not: a negative test that passes because the class never loads, an
+# authorisation test that passes because a second lock caught the request, a
+# variable documented and never wired. A green workflow that runs nothing is
+# the same class of bug with the widest blast radius, because everything
+# downstream trusts it.
+#
+# Three things guard against that here:
+#
+#   1. `mvn verify`, not `mvn test`. Failsafe runs the *IT classes, which are
+#      the integration tests - 100+ of the ~150 assertions in this project.
+#      `mvn test` runs surefire only and would skip every one of them while
+#      still printing BUILD SUCCESS.
+#   2. Explicit assertions on the test counts (see "guard" steps). If the suite
+#      silently stops discovering tests, the count collapses and the build
+#      fails rather than passing with zero.
+#   3. No `continue-on-error`, no `|| true`, and no step that swallows an exit
+#      code anywhere in this file.
+#
+# Testcontainers needs a Docker daemon; ubuntu-latest runners have one, which
+# is why there is no service container declared for Postgres.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Cancel superseded runs on the same ref; the suite takes a few minutes and
+# there is no value in finishing a run for a commit that has been replaced.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend — mvn verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: maven
+
+      # `verify` runs surefire (unit) AND failsafe (integration, Testcontainers).
+      # Using `test` here would skip every *IT class and still go green.
+      - name: mvn verify
+        working-directory: backend
+        run: mvn -B verify
+
+      # The guard on the guard. If test discovery breaks, the step above still
+      # succeeds with zero tests; this fails instead.
+      - name: Guard — integration tests actually ran
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          if [ ! -d target/failsafe-reports ]; then
+            echo "::error::No failsafe-reports directory - the integration tests did not run."
+            exit 1
+          fi
+          count=$(grep -ho 'tests="[0-9]*"' target/failsafe-reports/*.xml \
+                  | grep -o '[0-9]*' | paste -sd+ - | bc)
+          echo "Integration tests run: ${count:-0}"
+          if [ "${count:-0}" -lt 100 ]; then
+            echo "::error::Only ${count:-0} integration tests ran; expected at least 100."
+            exit 1
+          fi
+
+  frontend:
+    name: Frontend — build, lint, typecheck, test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `ci`, not `install`: it installs exactly the lockfile and fails if
+      # package.json and the lock have drifted, which is its own small version
+      # of the check this whole file is about.
+      - run: npm ci
+
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Guard — the test suite is not empty
+        run: |
+          set -euo pipefail
+          output=$(npm test 2>&1)
+          echo "$output" | tail -5
+          if echo "$output" | grep -qE "No test files found"; then
+            echo "::error::Vitest found no test files."
+            exit 1
+          fi
+
+      # Build last: it is the slowest step and the cheap checks should fail
+      # first. The build args mirror the Dockerfile's defaults, so CI compiles
+      # the same configuration a deploy would.
+      - name: npm run build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+          NEXT_PUBLIC_GOOGLE_SIGN_IN: "false"
+
+  wiring:
+    name: Wiring — env and compose drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: maven
+
+      # EnvExampleComposeDriftTest asserts that every APP_*, GOOGLE_* and
+      # NEXT_PUBLIC_* key documented in .env.example actually reaches its
+      # service in docker-compose.yml, and that compose interpolates none that
+      # .env.example fails to document. Three separate production bugs in this
+      # project were exactly this drift, each found by loading a page.
+      #
+      # It runs in the backend suite above too. It is repeated here as its own
+      # named job so the failure reads as "wiring drift" in the checks list
+      # rather than being buried in a 150-test run.
+      - name: Drift check
+        working-directory: backend
+        run: mvn -B -Dtest=EnvExampleComposeDriftTest -DfailIfNoSpecifiedTests=false surefire:test
+
+      - name: Guard — the drift check was not silently skipped
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          report=target/surefire-reports/TEST-com.headheartfrees.config.EnvExampleComposeDriftTest.xml
+          if [ ! -f "$report" ]; then
+            echo "::error::The drift check produced no report - it did not run."
+            exit 1
+          fi
+          count=$(grep -o 'tests="[0-9]*"' "$report" | grep -o '[0-9]*')
+          echo "Drift assertions run: $count"
+          if [ "$count" -lt 2 ]; then
+            echo "::error::Expected at least 2 drift assertions, got $count."
+            exit 1
+          fi
+
+  docker:
+    name: Docker — the stack builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Catches a Dockerfile that stopped building, which no other job would:
+      # the suites run against the source tree, not the images.
+      - name: docker compose build
+        run: docker compose build

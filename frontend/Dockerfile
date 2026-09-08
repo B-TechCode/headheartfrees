@@ -33,6 +33,20 @@ ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 ARG NEXT_PUBLIC_GOOGLE_SIGN_IN=false
 ENV NEXT_PUBLIC_GOOGLE_SIGN_IN=${NEXT_PUBLIC_GOOGLE_SIGN_IN}
 
+# Security headers are resolved by `headers()` at BUILD time, so both of these
+# are build args rather than runtime environment.
+#
+# CSP_REPORT_ONLY sends the policy as Content-Security-Policy-Report-Only, which
+# logs violations without blocking. Used to verify a policy against a real
+# browser before enforcing it; never true in a deployed build.
+ARG CSP_REPORT_ONLY=false
+ENV CSP_REPORT_ONLY=${CSP_REPORT_ONLY}
+
+# HSTS. Off by default and off locally: the header must never be sent over
+# plain HTTP. The primary place for it is the TLS terminator - see HANDOVER.
+ARG ENABLE_HSTS=false
+ENV ENABLE_HSTS=${ENABLE_HSTS}
+
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/node_modules ./node_modules

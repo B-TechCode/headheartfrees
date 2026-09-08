@@ -3810,3 +3810,437 @@ clicking.
    contact address is still a placeholder. Helpline re-verification cadence
    still undecided. Privacy policy still needs legal review. The Hinglish safety
    list still needs a native speaker. Refresh token pruning still has no job.
+
+---
+
+# Phase 9 — Hardening
+
+**Completed:** 2026-09-08
+**Scope:** PROJECT_BRIEF.md §9 row 9 — security headers, CORS lockdown, OpenAPI
+restriction, GitHub Actions, Lighthouse, accessibility audit. Plus the proxy-aware
+rate limiter, refresh-token cleanup, and making the documentation true.
+
+**This is the last build phase.** §11 is the production-readiness summary, and it
+is the section to read before deciding whether to deploy.
+
+---
+
+## 1. The CSP, and the decision that was deliberately not taken
+
+### What shipped
+
+```
+default-src 'self';
+script-src  'self' 'unsafe-inline';
+style-src   'self';
+img-src     'self' data:;
+font-src    'self';
+connect-src 'self' <API origin>;
+frame-ancestors 'none';
+base-uri 'none'; object-src 'none'; form-action 'self'
+```
+
+Built from what the app actually loads, checked first rather than assumed:
+
+- **~13 inline `<script>` blocks per page** carrying the RSC flight payload
+  (`self.__next_f.push`). Not optional, and their content changes per page and
+  per build, so hashes are impractical.
+- **Zero `<style>` tags, zero `style=` attributes, zero `style={{}}` in source**
+  across every route. So `style-src 'self'` carries **no `'unsafe-inline'`**.
+  Most Next applications cannot say that and it is worth not giving up.
+- The paper-grain overlay is a `data:` SVG in a CSS `background-image`, which is
+  governed by `img-src`, not `style-src` — hence `img-src 'self' data:`.
+- `next/font` self-hosts, so `font-src 'self'` with nothing from Google.
+- The frontend and backend are **different origins**, so `connect-src` names the
+  API explicitly. Omitting it blocks every request, and does so silently from
+  the user's side.
+
+### Why `'unsafe-inline'` on script-src, and what would reverse it
+
+**A per-request nonce with `'strict-dynamic'`, set from middleware, is the
+stronger policy.** This section exists so that decision can be reversed
+knowingly rather than rediscovered.
+
+**What the nonce would buy.** With `'unsafe-inline'`, a script tag injected into
+the page executes. With a nonce, it does not — the browser runs only scripts
+carrying the per-request value, so an injection that reaches the DOM is inert.
+That is the single largest weakness in the policy above, and it is not a
+theoretical one in general.
+
+**Why it was not taken here.** Next opts every page out of static generation
+when a nonce is used, because the value must differ per request. This site is
+almost entirely static: 19 prerendered routes, most of them prose. The cost is
+losing that, plus HTML CDN caching, plus middleware running on every request
+that the eventual owner would have to understand and maintain.
+
+Against that, the XSS path the nonce defends **does not currently exist in this
+application**:
+
+- no `dangerouslySetInnerHTML` anywhere in the codebase
+- React escapes every interpolation, and all user content is rendered as text
+- the backend rejects markup at the boundary (`NoHtml`), so a tag cannot be
+  stored in the first place
+- the only user-generated content that reaches a public page — feedback — passes
+  human moderation before it is published
+
+**Reverse this decision the moment any of those stops being true.** Concretely:
+a rich-text field, an embed, any third-party script, any HTML rendered from user
+input, or dropping moderation from the publish path. At that point the nonce is
+worth its cost, and the work is a `middleware.ts` that generates a value per
+request and sets the header — Next wires it into its own inline scripts from
+there.
+
+### Verified, not assumed
+
+A **`Content-Security-Policy-Report-Only` pass ran first**, on a build made for
+the purpose, with a `securitypolicyviolation` listener installed before each
+document loaded so parse-time violations were caught and not just later ones.
+Across **14 routes: 0 violations**, and an explicit cross-origin `fetch` to the
+API returned **200**, which is the one thing a page load cannot demonstrate on
+its own. The policy was then enforced and the same audit re-run against the
+shipped build: **0 violations again**.
+
+Then the flows, because a blocked request fails silently: signing in through the
+real form, landing signed in, the avatar menu rendering, and a reload on
+`/account` still signed in with the address shown — that last one exercises
+refresh-on-load, the call most likely to be blocked by a wrong `connect-src`.
+
+## 2. The other headers
+
+| Header | Value | Why |
+|---|---|---|
+| `X-Content-Type-Options` | `nosniff` | Standard; no cost. |
+| `X-Frame-Options` | `DENY` | Redundant with `frame-ancestors` on current browsers, kept for older ones. |
+| `Referrer-Policy` | `no-referrer` | See below. |
+| `Permissions-Policy` | camera, microphone, geolocation, payment, USB, MIDI, sensors, autoplay, display-capture, `browsing-topics` all `()` | The app uses none of them, so each is free to give up. `browsing-topics` opts out of interest inference, which a mental-health site should not participate in by default. |
+| `Strict-Transport-Security` | **off** | `ENABLE_HSTS`, default false. Never sent over plain HTTP locally. |
+
+**`no-referrer`, not the browser default.** The site loads no third-party
+resources at all and has exactly **one** outbound link — `findahelpline.com` on
+`/crisis-resources`. That single link is the whole argument:
+`strict-origin-when-cross-origin` would still tell that site the visitor came
+from here, and the pages someone reads on this domain (`/vent`,
+`/crisis-resources`) are precisely the ones that should not appear in anybody
+else's logs. Nothing here needs a referrer, so nothing is lost.
+
+**HSTS is one-way.** A browser that has seen it refuses plain HTTP to the host
+for `max-age` — one year as configured — and there is no way to retract it. Its
+primary home is the TLS terminator; the flag exists so a deployment without one
+is not left without the header. It goes on **last**, after TLS is confirmed
+working. HANDOVER §3.7 says so in the place the owner will actually read.
+
+## 3. Locked down
+
+**Swagger UI and `/v3/api-docs` are off unless the `local` profile is active.**
+They are a machine-readable map of every endpoint, its request schema and its
+validation rules, served to anyone who asks, and the application warned about
+this on every startup until now.
+
+`ApiDocsDisabledOutsideLocalIT` pins it, and needed its own boot to do so: every
+other test in this project runs under `@ActiveProfiles("local")` because
+`JwtSecretGuard` refuses the committed development secret anywhere else — so the
+entire suite had only ever observed the configuration where these are **on**.
+That test starts the app the way a deployment does, with a real secret and a
+non-`local` profile, and asserts 404 on both plus 200 on the real health
+endpoint, so it cannot pass by failing to start.
+
+**Actuator exposes nothing** (`management.endpoints.web.exposure.include: ""`).
+`/api/v1/health` is a hand-written controller and is what the compose healthcheck
+uses. `env` and `configprops` would have published which configuration and which
+secrets are set.
+
+**CORS: the app now refuses to start** on a wildcard origin, a schemeless origin,
+a trailing slash or a blank entry. The subtle case is the reason: with Spring's
+origin *patterns*, a wildcard **reflects the caller's origin back and allows
+credentials**, which is a working cross-origin read of an authenticated API from
+any site the pattern admits. This configuration uses `setAllowedOrigins`, which
+does not interpret patterns, so the same value would instead silently match
+nothing and break the frontend. One failure mode is a hole and the other is an
+outage; both are invisible from outside, so it fails at startup where somebody
+is watching.
+
+**`/design-system` is deleted**, as §7 said it would be. It existed to build the
+design system against, shipped no product surface, and an internal tool left on
+a public origin is a page nobody maintains and everybody can read.
+
+## 4. The rate limiter behind a proxy
+
+Keyed on `getRemoteAddr()`, so under Docker every request appeared to come from
+the gateway and all users shared one bucket — one person could exhaust the login
+limit for everybody.
+
+`ClientAddressResolver` honours `X-Forwarded-For` **only when the immediate peer
+is listed in `app.rate-limit.trusted-proxies`**, and reads the chain **from the
+right**, skipping trusted hops.
+
+Both halves matter and they fail in opposite directions:
+
+- Ignoring the header entirely: everyone behind the proxy shares one bucket — a
+  denial of service against real users.
+- Trusting it from anyone: **the limiter stops existing**, because a caller sends
+  a different value per request and gets a fresh bucket each time.
+
+Reading from the right is the second half of that. `X-Forwarded-For` is appended
+to by each hop, so everything left of the entry *our* proxy added is
+client-supplied — a caller sends a header with fabricated entries and the proxy
+appends rather than replaces. Taking the leftmost value, which is the common
+implementation, is exactly the bypass.
+
+**The list is empty by default**, which reproduces the old behaviour precisely:
+no header is ever honoured. The safe failure is the default; the owner must name
+their proxy deliberately (HANDOVER §3.6).
+
+**Buckets remain per instance.** They live in this process's heap, so two
+backends behind a load balancer enforce the limit twice over and a caller gets N
+times the allowance. **This holds for a single backend only.** A shared store
+(Bucket4j supports Redis) is what changes that, and it is not done.
+
+## 5. Refresh token cleanup — 30 days past expiry
+
+`refresh_tokens` gained a row per refresh and nothing removed them; one active
+person refreshing every fifteen minutes produces roughly 35,000 rows a year.
+
+`RefreshTokenCleanup` runs hourly, deleting rows whose token expired more than
+one refresh-TTL ago. The window is **derived from `APP_JWT_REFRESH_TOKEN_TTL`**
+(30 days by default) rather than hardcoded, so lengthening the TTL lengthens
+retention with it. A row therefore survives its full life plus another 30 days —
+up to 60 in total.
+
+**Why not just delete on rotation:** spent rows are the mechanism, not debris.
+Rotation marks the old token revoked; if that row is later presented, two parties
+hold tokens from one sign-in and the family is revoked. Delete it and the same
+presentation is an unknown token — a plain 401, theft undetected, the thief's own
+token still live. The retention window is a security parameter.
+
+**Two clauses, and the second is the one easy to omit.** Expired-and-revoked is
+the obvious case. Expired-and-*never*-revoked is the ending of every abandoned
+session, which is the common ending — a rule of "expired AND revoked" would keep
+those forever and the table would grow exactly as before. Deleting them is safe:
+an expired token is refused on its expiry whether or not a row is found.
+
+What it never touches is a row **revoked but not yet expired**, which is exactly
+the population reuse detection reads. The predicate is on `expiresAt` alone, so
+those are outside it by construction, and `RefreshTokenCleanupIT` asserts all
+four cases.
+
+Every instance runs the job; the delete is idempotent so a race is harmless. Any
+job added here that is **not** idempotent needs leader election first.
+
+## 6. Dependencies
+
+`npm audit`: **2 advisories (1 high) in postcss**, reachable only as a transitive
+dependency of `next` — XSS via an unescaped `</style>` in stringify output, and
+arbitrary `.map` file read via an attacker-controlled `sourceMappingURL`.
+
+**Both are build-time paths.** postcss runs when Tailwind compiles CSS during
+`npm run build`, over CSS this repository controls. No user input reaches it, and
+**it is not in the runtime image at all** — the standalone bundle contains
+compiled CSS, not the compiler.
+
+**Not fixed, deliberately.** `npm audit fix --force` installs **Next 16**, a
+major upgrade that changes routing, caching and build behaviour. Doing that in
+the final phase, with no time left to find what it broke, would trade a
+contained build-time advisory for an uncontained runtime risk. It is written up
+in HANDOVER §3.8 as something the owner inherits, with what it takes to close.
+
+Backend: no dependency-check plugin was added. Spring Boot 3.5.x manages the
+dependency versions and none are pinned below their managed version. **This is
+weaker than a real scan and is stated as such** — no CVE database was consulted
+for the Java side.
+
+## 7. Accessibility — 100 across every route
+
+Lighthouse (which bundles axe) over **all 14 routes**: **accessibility 100,
+zero failures**, everywhere. Nothing needed fixing.
+
+**What that does not mean.** An automated pass checks what a machine can check —
+contrast ratios, names on controls, landmark structure, heading order, ARIA
+validity. It cannot check whether the result is usable. These remain
+**untested**, and they are the ones that matter most on this product:
+
+- **Screen reader flow.** No screen reader has ever been run over this site.
+  Axe confirms the rating control is a named radiogroup in a fieldset; it cannot
+  confirm what NVDA or VoiceOver actually announces when a person arrives at it.
+- **The star rating with a real screen reader.** Called out in the phase 7 log as
+  the specific thing automated tools would miss, and it is still true.
+- **Focus order in the moderation queue.** `<details>` rows that expand, a filter
+  tab pair, and buttons that disappear after a decision. Axe sees a valid tree;
+  whether the focus lands somewhere sensible after a row's button vanishes has
+  not been observed.
+- **Keyboard path through the vent flow** end to end, with an on-screen keyboard
+  on a real phone, which §8 explicitly asked for and which nothing here can do.
+
+## 8. Lighthouse
+
+| Route | Performance | Accessibility | Best practices | SEO |
+|---|---|---|---|---|
+| `/` | **88** | **100** | **100** | **100** |
+| `/vent` | **89** | **100** | **100** | **100** |
+| `/voices` | **87** | **100** | **100** | **100** |
+
+Performance sits in the high 80s on the same handful of items on every route:
+render-blocking CSS, `legacy-javascript` (Next's own polyfill bundle), and LCP.
+**Nothing was done about them.** Each fix is either a Next internal or would mean
+removing something real — the self-hosted font, the stylesheet — and the
+instruction was not to chase 100 by removing what matters. A 100 bought that way
+would be a worse site with a better number.
+
+## 9. CI — built, not confirmed
+
+**There was no workflow.** The brief listed one under Infra from phase 1 and it
+was never created; PHASE_LOG has carried "no CI" as open since phase 7. So this
+phase wrote it rather than verifying it.
+
+`.github/workflows/ci.yml`, four jobs: **backend** (`mvn verify`), **frontend**
+(lint, typecheck, test, build), **wiring** (the env/compose drift check as its
+own named job), **docker** (`docker compose build`).
+
+The thing it is built against is a workflow that appears to run and does not —
+the same class of bug as everything else this project has found:
+
+- **`mvn verify`, not `mvn test`.** Failsafe runs the `*IT` classes: 114 of the
+  180 backend tests. `mvn test` runs surefire only and would skip every
+  integration test while printing BUILD SUCCESS.
+- **Explicit count guards.** The backend job fails if fewer than 100 integration
+  tests ran; the wiring job fails if the drift report is missing or has fewer
+  than 2 assertions. If discovery silently breaks, the count collapses and the
+  build goes red instead of green-on-nothing.
+- **No `continue-on-error`, no `|| true`**, no step that swallows an exit code.
+  Verified by parsing the YAML rather than by reading it.
+
+**It has never executed.** There is no remote to push to from here, so the
+workflow is syntactically valid, structurally checked, and **unrun**. The first
+push will be its first real test, and that is the honest status. The count guards
+are what make a false green unlikely, not impossible.
+
+## 10. The rule, verified end to end in a browser
+
+The last check, and the one the whole project rests on. Not a unit test: nine
+phases have added auth, sessions, feedback, moderation and headers on top of that
+page, and the question was whether any of it leaked in.
+
+A real browser, signed out, cookies cleared. A sentinel string typed into the
+textarea the way a person types — native value setter plus a bubbling `input`
+event, because React ignores a direct `.value` assignment. Then Release. **Every**
+network request recorded: method, URL, headers, body.
+
+| Check | Result |
+|---|---|
+| Requests carrying the sentinel, in any URL, body or header | **0 of 25** |
+| The release call's actual body | `{"mood":null}` |
+| `vent_events` rows | 7 → 8 |
+| The new row, every column | `id=8, mood=NULL, created_at=2026-09-08 14:02:10+00` |
+| Columns that exist on the table | `id`, `mood`, `created_at` — there is nowhere for text to go |
+| Sentinel in backend / frontend / db logs | **0 / 0 / 0** |
+| Sentinel anywhere in the `feedback` table | **0** |
+
+The text reached the release page and the component holding it unmounted. It was
+never sent, and there is no column it could have been stored in.
+
+## 11. Production readiness — read this before deploying
+
+### Ready
+
+- **Rule 2.1 holds**, verified end to end in a browser on the final build.
+- **Security headers** enforced and verified against a real browser across 14
+  routes, with the auth flow working under them.
+- **Authentication**: bcrypt, short-lived access tokens held in memory only,
+  httpOnly `SameSite=Strict` refresh cookie, rotation with reuse detection and
+  family revocation, a CSRF header on the two cookie-authenticated POSTs.
+- **Authorisation**: `@PreAuthorize` plus a path rule, each independently tested;
+  401 and 403 correctly distinguished.
+- **Input**: bean validation throughout, markup rejected at the boundary, one
+  error shape, rate limits on auth, vent and feedback.
+- **The endpoint map, actuator and the design-system page** are all closed.
+- **Accessibility**: 100 on every route, zero automated failures.
+- **Suites**: 180 backend (66 unit + 114 integration), 74 frontend. All green,
+  run through `./mvnw verify` and `npm run build/lint/typecheck/test`.
+
+### Not ready, and what it would take
+
+1. **Two placeholders make the site partly non-functional.** The contact address
+   (`lib/contact.ts` line 20, flag line 24) and the payment method
+   (`lib/support.ts` line 30, flag line 41). Both show honest notices while
+   unset, so nothing lies to a visitor — but `/contact` cannot receive mail and
+   `/support` cannot receive money. **Two lines each.**
+2. **`APP_RATE_LIMIT_TRUSTED_PROXIES` must be set** once there is a reverse
+   proxy, or every user behind it shares one login bucket.
+3. **The launch blockers in HANDOVER §3 are unchanged and are not developer
+   decisions**: legal review of the privacy policy, a native Hindi speaker on the
+   crisis keyword list, helpline numbers re-verified, and — if payments are ever
+   enabled — the tax and FCRA position.
+4. **Single instance only.** Rate-limit buckets are per process and the cleanup
+   job has no leader election. Two backends behind a load balancer will not
+   enforce limits correctly.
+5. **CI has never run.** See §9.
+6. **The postcss advisory is inherited.** Build-time only; closing it is a Next
+   16 upgrade. §6 and HANDOVER §3.8.
+7. **No screen reader has ever been used on this site.** §7.
+8. **No load, soak or failure testing.** Nothing has run under concurrency,
+   nothing has waited for an access token to expire in real time, and the
+   two-simultaneous-refresh race noted in phase 5 is still unexercised.
+9. **No backups, no monitoring, no alerting, no log aggregation.** None of it was
+   in scope for any phase and none of it exists. A deployment without at least
+   database backups is one disk from losing every account and every published
+   note.
+
+### The honest summary
+
+**The application is sound and the security work is real.** What is missing is
+almost entirely operational: backups, monitoring, a proxy configuration, a CI run,
+and a handful of decisions only the owner can make.
+
+**It should not go public today.** It should go public after items 1–3 are done,
+with backups configured, and with someone watching it for the first week. Item 9
+is the one that would hurt most and is the least interesting to fix.
+
+Nothing in this log is worded to make the project sound more finished than it is.
+Where something was verified, it says how. Where it was not, it says so.
+
+---
+
+## 12. Corrections to earlier entries
+
+Earlier sections are left exactly as written — they record what was true when
+written. These are the corrections, collected rather than edited in.
+
+### 12.1 `./mvnw` is NOT broken. The phase 7 log was wrong.
+
+Phase 7 §5 recorded that the Maven wrapper "cannot run" and that
+`.mvn/wrapper/` was missing its jar, and phase 8 carried it forward as an open
+item. **Both were wrong, and the error was mine.**
+
+`maven-wrapper.properties` declares `distributionType=only-script`, which needs
+no jar: the script downloads Maven itself. The classworlds error I hit was a
+local Git Bash environment problem — a `MAVEN_HOME` pointing at something
+stale — and it reproduced with plain `mvn` in that shell too, which should have
+told me the repository was not at fault.
+
+From PowerShell, `./mvnw.cmd -B verify` downloads Maven 3.9.11 and runs the full
+suite green. **Nothing needs fixing and phase 9 changed nothing here.** Anyone
+who read those entries and went looking for a missing jar was sent on an errand
+that did not exist.
+
+### 12.2 Items closed by this phase
+
+| Recorded open in | Item | Status |
+|---|---|---|
+| Phase 2 §7 | postcss advisories deferred to phase 9 | **Assessed, not fixed** — build-time only; closing it is a Next 16 upgrade. §6, HANDOVER §3.8 |
+| Phase 5 §5 | `@PreAuthorize` had no endpoint to guard | Closed in phase 7 |
+| Phase 5 | Swagger served in production | **Closed** — local profile only, pinned by a test |
+| Phase 5 | Rate limiter shares one bucket behind Docker | **Closed** — trusted-proxy resolution. Owner must set the address (§4) |
+| Phase 6 §7 | `SameSite=Strict` cookie never replayed by a real browser | **Closed** — sign-in and refresh-on-reload driven in Chrome (§1) |
+| Phase 6 §9 | Refresh token pruning has no job | **Closed** (§5) |
+| Phase 7 §6 | No browser was driven — carried five phases | **Closed** — headless Chrome over CDP; every claim in this entry that says "verified in a browser" was |
+| Phase 7 §6 | No breakpoint or visual check | **Partly closed** — phase 8 measured the footer at six widths; a full visual review across all routes still has not happened |
+| Phase 7 §7 | No CI | **Written, never executed** (§9) |
+| Phase 8 §6 | `/support` payment block only ever rendered in jsdom | **Still open** — it needs a real UPI ID, which is the owner's |
+| Phase 8 §7 | `./mvnw` broken | **Withdrawn** — see 12.1 |
+| All phases | Accessibility never audited | **Closed** — 100 on 14 routes, with the limits in §7 |
+
+### 12.3 Still open, and now permanently the owner's
+
+Screen reader testing (§7), load and concurrency testing, backups and
+monitoring, the two placeholders, the trusted-proxy address, and the HANDOVER §3
+launch blockers. None of these are code problems and none can be closed from
+inside this repository.

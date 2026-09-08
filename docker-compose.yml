@@ -57,6 +57,11 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       APP_OAUTH2_SUCCESS_REDIRECT: ${APP_OAUTH2_SUCCESS_REDIRECT:-http://localhost:3000/auth/callback}
+      # Phase 9. Peers allowed to speak for a client via X-Forwarded-For.
+      # Empty by default, which means the header is never honoured and every
+      # caller behind the Docker gateway shares one rate-limit bucket. That is
+      # the safe failure; trusting the header from anyone removes the limiter.
+      APP_RATE_LIMIT_TRUSTED_PROXIES: ${APP_RATE_LIMIT_TRUSTED_PROXIES:-}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
@@ -82,6 +87,16 @@ services:
         # two are separate settings because there is no endpoint yet that lets
         # the frontend ask. Also build-time - a restart will not change it.
         NEXT_PUBLIC_GOOGLE_SIGN_IN: ${NEXT_PUBLIC_GOOGLE_SIGN_IN:-false}
+        # Phase 9. Both are BUILD time: Next resolves headers() when it builds,
+        # so changing either needs `docker compose build frontend`.
+        #
+        # CSP_REPORT_ONLY sends the policy as report-only, which logs
+        # violations without blocking. For verifying a policy change against a
+        # real browser; never true in a deployed build.
+        CSP_REPORT_ONLY: ${CSP_REPORT_ONLY:-false}
+        # HSTS. Off here and off in every local run - the header must never be
+        # sent over plain HTTP. Its primary home is the TLS terminator.
+        ENABLE_HSTS: ${ENABLE_HSTS:-false}
     environment:
       PORT: 3000
     ports:

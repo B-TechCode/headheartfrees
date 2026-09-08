@@ -37,6 +37,13 @@ These are correctness requirements, not preferences. Violating any of them is a 
 
 ## 3. Tech stack
 
+> **Phase 9 note (2026-09-08).** Two items in this section were specified from
+> the start and only became true at the end, so they are marked here rather
+> than left ambiguous: the GitHub Actions workflow now exists at
+> `.github/workflows/ci.yml`, and Swagger is restricted to the `local` profile.
+> Framer Motion was never installed — the transitions that exist are CSS, and
+> nothing in the product needed a motion library.
+
 ### Backend
 - Java 21, Spring Boot — latest supported 3.x GA (currently 3.5.16), Maven
 - Spring Web, Spring Security 6, Spring Data JPA, Validation
@@ -44,7 +51,8 @@ These are correctness requirements, not preferences. Violating any of them is a 
 - JWT (jjwt) — short-lived access token + refresh token in an httpOnly cookie
 - Google OAuth2 login (Spring Security OAuth2 Client)
 - Bucket4j for rate limiting
-- springdoc-openapi for Swagger UI
+- springdoc-openapi for Swagger UI (**local profile only from phase 9** — the
+  endpoint map is off by default)
 - JUnit 5, MockMvc, Testcontainers
 
 ### Frontend

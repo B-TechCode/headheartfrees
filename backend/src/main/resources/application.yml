@@ -57,6 +57,16 @@ app:
   version: @project.version@
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+  # Peers allowed to speak for a client behind them via X-Forwarded-For.
+  #
+  # EMPTY BY DEFAULT, and that is the safe direction. Behind a reverse proxy,
+  # set this to that proxy's address so per-user limits work; leave it empty and
+  # everyone behind the proxy shares one bucket. Trusting the header without
+  # naming the proxy would let any caller bypass the limiter entirely by varying
+  # it, so this is never a wildcard. See ClientAddressResolver.
+  rate-limit:
+    trusted-proxies: ${APP_RATE_LIMIT_TRUSTED_PROXIES:}
   auth:
     # Development default so a fresh clone and the test suite both work. It is
     # long enough for HS256, so nothing downstream rejects it — which is why an
@@ -75,10 +85,35 @@ app:
     admin-bootstrap-emails: ${APP_ADMIN_BOOTSTRAP_EMAILS:}
     oauth2-success-redirect: ${APP_OAUTH2_SUCCESS_REDIRECT:http://localhost:3000/auth/callback}
 
+# Swagger UI and the OpenAPI JSON are OFF by default, and are re-enabled only
+# by the `local` profile (application-local.yml).
+#
+# They are a map of every endpoint, its request shape and its validation rules,
+# served to anyone who asks. That is a developer convenience in development and
+# free reconnaissance in production, and the application warned about it on
+# every startup until phase 9.
 springdoc:
+  api-docs:
+    enabled: false
   swagger-ui:
+    enabled: false
     path: /swagger-ui.html
     operations-sorter: method
+
+# Actuator: expose nothing.
+#
+# The health endpoint this project actually uses is /api/v1/health, a
+# hand-written controller with a fixed body. Actuator's own endpoints are not
+# needed, and `env`, `configprops` and `heapdump` in particular would publish
+# configuration - including which secrets are set - to whoever reaches them.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ""
+  endpoint:
+    health:
+      enabled: false
 
 logging:
   level:

@@ -20,15 +20,21 @@ import org.springframework.stereotype.Component;
  * The key is {@code request.getRemoteAddr()}, hashed with SHA-256 before it is
  * used. Two deliberate decisions sit behind that:
  *
- * <p><strong>{@code X-Forwarded-For} is not trusted.</strong> There is no
- * reverse proxy in front of this application yet, so any such header would be
- * client-supplied and a caller could bypass the limit entirely by varying it.
- * The cost of ignoring it is real and is documented rather than hidden: under
- * {@code docker compose} every request arrives from the Docker gateway address,
- * so all users behind it share one bucket. That is acceptable for local work
- * and is not acceptable in production — phase 9 should configure a trusted
- * proxy (Spring's {@code server.forward-headers-strategy}) at the same time it
- * introduces the real reverse proxy, and not before.
+ * <p><strong>{@code X-Forwarded-For} is trusted only from a configured
+ * proxy.</strong> Phase 9 moved that decision into
+ * {@link ClientAddressResolver}: the header is honoured when the immediate peer
+ * is listed in {@code app.rate-limit.trusted-proxies}, and ignored otherwise.
+ * The list is empty by default, so an unconfigured deployment behaves exactly
+ * as this class did before — every caller behind the Docker gateway shares one
+ * bucket. That is a denial of service against real users and it is the safe
+ * failure; trusting the header blindly is a complete bypass, and is the unsafe
+ * one. See that class for why the address is read from the right.
+
+ * <p><strong>The buckets are per instance.</strong> They live in this
+ * process's heap, so two backends behind a load balancer enforce the limit
+ * twice over and a caller gets N times the allowance. This holds for a single
+ * backend only; a shared store (Bucket4j supports Redis and others) is what
+ * changes that, and it is recorded in PHASE_LOG rather than implied away.
  *
  * <p><strong>The address is hashed, not stored raw.</strong> The limiter needs
  * to tell callers apart, which a hash does; it never needs to know who they
@@ -46,6 +52,12 @@ public class ClientIpRateLimiter {
 
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
+    private final ClientAddressResolver addresses;
+
+    ClientIpRateLimiter(ClientAddressResolver addresses) {
+        this.addresses = addresses;
+    }
+
     /**
      * Attempts to consume one token for the caller behind {@code request},
      * against the given policy.
@@ -60,7 +72,7 @@ public class ClientIpRateLimiter {
      *         token is next available
      */
     public ConsumptionProbe tryConsume(HttpServletRequest request, RateLimitPolicy policy) {
-        String key = policy.name() + ':' + hash(request.getRemoteAddr());
+        String key = policy.name() + ':' + hash(addresses.resolve(request));
         return buckets.computeIfAbsent(key, unused -> newBucket(policy))
                 .tryConsumeAndReturnRemaining(1);
     }

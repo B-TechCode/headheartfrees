@@ -4,3 +4,12 @@ logging:
     com.headheartfrees: DEBUG
     org.springframework.web: INFO
     org.springframework.security: INFO
+
+# Swagger UI, on for local development only. The base application.yml turns
+# both of these off so that a deployment which forgets to set a profile gets
+# the safe behaviour rather than the convenient one.
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

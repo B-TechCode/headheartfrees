@@ -5,13 +5,17 @@ import { focusRing } from "@/components/ui/styles";
 /**
  * The donation section on /about (PROJECT_BRIEF.md §7).
  *
- * Quiet by instruction and by judgement: a heading, three sentences on what
- * support actually pays for, one link. No banner, no urgency, no progress bar,
- * no suggested amounts, no total raised. A product whose pitch is "nothing is
- * asked of you" cannot then ask loudly.
+ * Quiet by instruction and by judgement: a heading, two sentences, one link.
+ * No banner, no urgency, no progress bar, no suggested amounts, no total
+ * raised. A product whose pitch is "nothing is asked of you" cannot then ask
+ * loudly.
  *
- * The costs named below are the real ones for this stack — a server, a domain,
- * a database. No figure is given, because there isn't a verified one to give.
+ * **This block deliberately does not list what support pays for.** It used to,
+ * and `/support` said the same thing in slightly different words — two copies
+ * of one claim, which is how they drift until a visitor finds the site
+ * contradicting itself about money. `/support` is the source of truth for the
+ * detail; this says only enough to explain the link. Anything more specific
+ * belongs there.
  */
 export function DonationSection() {
   return (
@@ -22,8 +26,8 @@ export function DonationSection() {
 
       <div className="mt-3 max-w-[68ch]">
         <p className="text-body text-ink-soft">
-          This runs on a small server, a domain, and a database that holds no vent text. That
-          is most of what support pays for.
+          This costs a small amount to keep running, and anyone who wants to put something
+          towards that can.
         </p>
         <p className="mt-3 text-body text-ink-soft">
           Nothing here is behind a payment, and nothing will be. Giving changes nothing about

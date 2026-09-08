@@ -3628,3 +3628,185 @@ not demote. That account and the test rows are dev-only artifacts.
    Helpline re-verification cadence still undecided. Privacy policy still needs
    legal review. The Hinglish safety list still needs a native speaker. Refresh
    token pruning still has no job.
+
+---
+
+# Phase 8 — Support
+
+**Completed:** 2026-09-07
+**Scope:** PROJECT_BRIEF.md §9 row 8 — the `/support` page, the footer link, the
+About section. **No endpoint and no table**; see §1 below. Closes the last 404
+in the build.
+
+---
+
+## 1. `donation_intents` was removed rather than built
+
+The brief specified a fifth table and `POST /api/v1/donations/intent`. Both are
+gone from §5 and §6, each with a dated amendment.
+
+The decisive argument is the flow of funds. There is no payment provider in
+this project and one cannot be added by a developer — taking money in India
+needs the owner's bank account, PAN and KYC — so **nothing could ever close an
+intent row**. It is permanently write-only: a figure somebody typed, kept
+forever, reconciled against nothing, in a project that truncates feedback
+timestamps to the hour and refuses to store an IP address at all.
+
+Two supporting reasons, recorded because they are the ones that would come back
+if this is ever revisited:
+
+**It could not be built honestly.** The only truthful interface over an endpoint
+that records an intent and takes no money is one that says so — at which point
+nobody uses it and the table collects an empty set. The alternative is a form
+that returns 201 to someone who typed ₹500 and believes they have given
+something. There is no version that is both used and honest.
+
+**It guaranteed a rewrite.** `amount_minor`/`currency`/`status`/`provider_ref`
+is a sketch of what a provider hands you, and Razorpay, UPI intent flows and
+Stripe each have different reconciliation models and status vocabularies.
+Whatever was built now would be replaced wholesale on the day a provider was
+chosen — a migration to add it and a second to undo it.
+
+`backend/.../donation/package-info.java` is **kept and empty**, with the reason
+in its javadoc, so the decision is visible where someone would go looking for
+the code. §4's repo layout comment now reads `# empty — see the §5 note`.
+
+## 2. The payment method: two lines, and why that matters
+
+`frontend/src/lib/support.ts` mirrors `lib/contact.ts`:
+
+```
+line 30   export const SUPPORT_UPI_ID = "REPLACE-ME@example.invalid";
+line 41   export const SUPPORT_PAYMENT_IS_PLACEHOLDER = true;
+```
+
+**Both must change in the same edit**, and they fail in opposite directions if
+only one does. A real ID with the flag still `true` hides the payment details,
+so nobody can give anything. A cleared flag with the placeholder ID still there
+publishes an invalid address — and money sent to a valid-but-wrong VPA reaches
+a stranger, so that direction loses somebody's money rather than merely
+failing. Neither is visible in a one-line diff, which is why both are pinned by
+tests.
+
+Nothing was guessed at: no UPI ID, no bank account, no Razorpay key, no
+donation link. The `upi://` deep link is derived from the constant rather than
+written separately, so there is no second copy to go stale, and it carries **no
+`am=` parameter** — that would prefill a figure in the payment app, which is a
+suggested amount arriving through the back door.
+
+## 3. The notice is worded for a visitor
+
+Not "payment not configured", which is a status line about the software. The
+person reading it came here meaning to give and needs to know that they cannot,
+that they have not done anything wrong, and that nothing is owed:
+
+> **There is no way to give anything yet**
+>
+> No payment method has been set up, so nothing can be sent to this site at the
+> moment — and that is fine. Everything here works and stays free regardless. If
+> you came to this page meaning to help, the thought is the part that was going
+> to be worth anything anyway.
+
+No apology and no "coming soon" — one is theatre, the other is a promise about a
+date nobody has set. While the flag is `true` **no payment details render at
+all**, so a half-configured page cannot read as a working one.
+
+## 4. What the page does not do
+
+Absent by instruction and by judgement, each with a comment at the point where
+someone would add it: progress bar, goal, total raised, donor count, urgency or
+scarcity, deadline, suggested amounts, tiers, rewards, memberships, badges.
+
+**And no figures.** The costs are named as categories — a server, a domain, a
+database — and the page says out loud that no number is given because there is
+not a verified one to give. An invented "under ₹2,000 a year" would break the
+promise the opening paragraph makes two sentences earlier. The comment in the
+file says a number here needs to come from a real invoice.
+
+Guilt was the likeliest way to get this subtly wrong, including its gentle
+registers — "if you can spare it", "every little helps", "only if it has been
+useful". Each turns not giving into a small failure. `SupportPage.test.tsx`
+asserts against those phrases specifically.
+
+## 5. Reconciling the two entry points
+
+The About section previously listed what support pays for, and the new page said
+the same thing in different words — two copies of one claim, which is how they
+drift until the site contradicts itself about money. `/support` is now the
+single source of truth for the detail; `DonationSection` says only enough to
+explain its link.
+
+The released page's line — "This runs on a small server and stays free. You can
+help pay for it if you want to, and nothing changes if you do not" — was checked
+against the new copy and still reads true. It was not changed.
+
+## 6. Verification actually run
+
+`mvn verify` **48 unit + 106 integration, 0 failures**. `npm test` **74
+passing** (67 before, 7 new). `npm run build`, `lint`, `typecheck` clean.
+
+The support tests were checked against their own removal rather than watched to
+pass:
+
+| Mutation | Result |
+| --- | --- |
+| payment details rendered regardless of the flag | 2 tests fail |
+| "if you can spare it, every little helps" added to the copy | the forbidden-phrase test fails |
+| unmodified | 7 pass |
+
+Then against the running stack, `docker compose up -d --build`:
+
+| Check | Result |
+| --- | --- |
+| `/support` | **200** |
+| footer "Support this space" | resolves — `href="/support"` present, target 200 |
+| About → "How to support this space" | resolves, target 200 |
+| the placeholder notice in the served HTML | present: "There is no way to give anything yet", "and that is fine" |
+| `REPLACE-ME@example.invalid` in the served HTML | **absent** — 0 occurrences |
+| `<title>` and meta description | "Support this space · HeadHeartFreeS", real description |
+| **every route in the app** | 15 routes, **all 200** |
+| `/nope` as a control | **404**, so the check above is not vacuous |
+| linked-but-missing routes, diffed across the whole source | **none** |
+
+**This was the last 404.** Every internal `href` in the codebase now has a
+matching route, verified by diffing all links against all pages rather than by
+clicking.
+
+## 7. NOT verified
+
+1. **No browser was driven — fifth phase running.** The standing gap.
+2. **No breakpoint check** at 320, 375, 414, 768, 1024, 1440 or 1920. This page
+   is static prose with no interactive control and one link, which makes it the
+   lowest-risk page in the project for that gap — but it is still unverified,
+   and the `<code>` block holding the UPI ID at 320px is the one element worth
+   a look, since a long VPA could overflow.
+3. **No visual review.** Nobody has looked at the page.
+4. **The configured state has only been rendered in jsdom.** The tests cover it
+   by mocking the module, but nobody has set a real UPI ID and seen the payment
+   block on a real page — because doing so would require inventing an
+   identifier, which was the one thing ruled out.
+5. **The `upi://` link has never been opened by a payment app.** It is
+   well-formed per the UPI deep-link spec and carries `pa`, `pn` and `cu`, but
+   whether a given Indian payment app accepts it is untested and untestable
+   without a real VPA.
+6. **`npm audit`** still reports the pre-existing postcss advisories via `next`.
+
+## 8. Still open
+
+1. **The browser pass**, now five phases old and the largest process gap in the
+   project.
+2. **The owner must supply a payment method** — HANDOVER §2.7, two lines.
+3. **The owner must resolve the legal and tax position** before enabling
+   payments — HANDOVER §2.8: individual vs registered entity, income tax
+   treatment, FCRA if funds ever arrive from outside India, and 80G. **Nothing
+   on the page states or implies any tax status, and nothing may be added that
+   does** without the registration behind it.
+4. **A QR code** is the natural next step once a real UPI ID exists, generated
+   from the `upi://` link the page already builds. Not added now, because a QR
+   encoding an invalid address is worse than none.
+5. **No CI.** Both suites pass locally and nothing runs them anywhere else.
+6. **`./mvnw` is broken** — missing wrapper jar. Carried from phase 7.
+7. `GET /api/v1/auth/providers` to delete `NEXT_PUBLIC_GOOGLE_SIGN_IN`. The
+   contact address is still a placeholder. Helpline re-verification cadence
+   still undecided. Privacy policy still needs legal review. The Hinglish safety
+   list still needs a native speaker. Refresh token pruning still has no job.

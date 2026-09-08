@@ -79,6 +79,67 @@ emails a void and waits.
 The feedback wall is reviewed before anything is published (Phase 7). Someone
 has to do that reviewing, and that person needs an admin account. See §6.
 
+### 2.7 A payment method — and there are TWO lines to change
+
+`/support` is complete apart from the owner's payment identifier. It is one
+line:
+
+```
+frontend/src/lib/support.ts  line 30
+export const SUPPORT_UPI_ID = "REPLACE-ME@example.invalid";
+```
+
+**And a second line, which is easy to miss:**
+
+```
+frontend/src/lib/support.ts  line 41
+export const SUPPORT_PAYMENT_IS_PLACEHOLDER = true;
+```
+
+Set the real ID and change that flag to `false` **in the same edit**. They fail
+in opposite directions if only one is done: a real ID with the flag still `true`
+leaves the notice up and the payment details hidden, so nobody can give
+anything; clearing the flag without a real ID publishes an invalid address, and
+money sent to a valid-but-wrong VPA reaches a stranger.
+
+While the flag is `true` the page carries a visible notice saying there is no
+way to give anything yet, worded for a visitor rather than as a status message,
+and renders no payment details at all. That notice is the reason a
+half-configured page cannot quietly read as a working one.
+
+**A UPI ID needs no integration** — no SDK, no API key, no provider account, no
+webhook. The ID and a link are the entire mechanism, which is why there is no
+payment configuration anywhere else in this repository. A scannable QR code is
+the natural next step once a real ID exists; it can be generated from the same
+`upi://` link the page already builds.
+
+This is the owner's identifier and their decision. It was not guessed at.
+
+### 2.8 A decision on the legal and tax position of accepting money
+
+**Resolve this before enabling payments, not after.** None of it is a
+developer's call and none of it has been assumed anywhere in the code or the
+copy:
+
+- **Who receives the money.** An individual, or a registered entity — a
+  society, trust or Section 8 company. The answer changes everything below.
+- **Income tax treatment.** Money received by an individual and money received
+  by a registered nonprofit are taxed differently. Donations to an individual
+  are generally income.
+- **FCRA.** If funds ever arrive from outside India, the Foreign Contribution
+  (Regulation) Act applies and registration is required *in advance*. A UPI ID
+  posted on a public page is reachable from anywhere, so this is not
+  hypothetical the moment the page goes live.
+- **80G and similar.** Only certain registered entities can offer tax-deductible
+  receipts.
+
+**Nothing on `/support` states or implies any tax status, and nothing may be
+added that does.** No "tax-deductible", no "80G", no "registered charity", no
+receipt language. Adding any of those without the registration behind it is a
+misrepresentation to the person giving, and the page is written so there is no
+half-true sentence to extend. If the status is later established, the copy can
+say so — with the registration number.
+
 ---
 
 ## 3. What must happen before a public launch

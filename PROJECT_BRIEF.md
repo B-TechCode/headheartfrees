@@ -79,7 +79,7 @@ headheartfrees/
 │       ├── auth/         # user, registration, login, JWT, OAuth2
 │       ├── feedback/     # feedback submission + moderation
 │       ├── vent/         # anonymous counter ONLY
-│       └── donation/     # donation intents
+│       └── donation/     # empty — see the §5 note
 └── frontend/
     ├── Dockerfile
     └── src/
@@ -102,6 +102,24 @@ gateway in front, without rewriting business logic.
 ## 5. Data model
 
 Four tables store anything. There is deliberately no table for vent content.
+
+> **`donation_intents` removed 2026-09-07 (phase 8).** This section previously
+> specified a fifth table recording an amount, a currency and a status. There is
+> no payment provider in this project and one cannot be added by a developer —
+> taking money in India needs the owner's bank account, PAN and KYC — so nothing
+> could ever have closed one of those rows. An intent with no possible outcome
+> is permanently write-only: a figure somebody typed, kept forever, reconciled
+> against nothing, in a project that truncates feedback timestamps and refuses
+> to store an IP address.
+>
+> It was also the one shape that could not be built honestly. The only truthful
+> interface over an endpoint that records an intent and takes no money is one
+> that says so, at which point nobody uses it and the table collects an empty
+> set.
+>
+> The table and its endpoint return **only if a provider exists that can confirm
+> payment**, and their shape will come from that provider's reconciliation model
+> rather than from this sketch.
 
 > **`refresh_tokens` added 2026-09-05 (phase 5).** This section previously said
 > three tables. Refresh-token rotation needs somewhere to record which tokens
@@ -139,9 +157,6 @@ vent_events
   id BIGSERIAL PK, mood TEXT NULL, created_at
   -- counter only. no content, no user_id, no IP.
 
-donation_intents
-  id UUID PK, user_id UUID NULL, amount_minor BIGINT, currency TEXT,
-  status TEXT, provider_ref TEXT NULL, created_at
 ```
 
 All schema changes go through Flyway migrations in `src/main/resources/db/migration`.
@@ -167,8 +182,12 @@ POST   /api/v1/feedback               { rating, message, displayName?, location?
 GET    /api/v1/feedback               → approved feedback, paginated, public
 PATCH  /api/v1/admin/feedback/{id}    { status }          → ADMIN role only
 
-POST   /api/v1/donations/intent       { amountMinor, currency }
 ```
+
+> **`POST /api/v1/donations/intent` removed 2026-09-07 (phase 8).** See the
+> §5 note. It returns with `donation_intents`, if a payment provider ever
+> exists to close the loop. `/support` is a static page in the meantime and
+> calls no API at all.
 
 Rate limits: 5/min on auth endpoints per IP, 3/hour on feedback per IP,
 30/min on vent release. Return `429` with a `Retry-After` header.
@@ -360,7 +379,7 @@ Complete one phase, print a suggested commit message, then stop.
 | 5 | Auth backend | User entity, Flyway migration, register/login, JWT, refresh rotation, Google OAuth2, `/me`, rate limiting, tests |
 | 6 | Auth frontend | Login, register, Google button, session handling, avatar menu, protected routes, soft arrival prompt |
 | 7 | Feedback | Submission, public list, moderation endpoints, admin queue UI |
-| 8 | Donation | `/support` page, footer link, About section, donation intent endpoint |
+| 8 | Donation | `/support` page, footer link, About section. **No endpoint** — see §5 |
 | 9 | Hardening | Security headers, CORS lockdown, OpenAPI docs, GitHub Actions, Lighthouse, a11y audit |
 
 > **Reordered 2026-09-04.** The vent flow was phase 6, behind two auth phases.

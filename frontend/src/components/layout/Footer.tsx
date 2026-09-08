@@ -29,19 +29,46 @@ export function Footer() {
       <CrisisStrip />
 
       {/*
-        Two blocks, anchored to opposite edges rather than sitting in grid
-        columns. With the Navigate column gone, a fractional grid would have
-        left the brand block capped at its max-width with several hundred pixels
-        of dead space beside it — the lopsided look this layout was changed to
-        avoid. justify-between makes the gap between them structural instead.
+        ===================================================================
+        Why this is a two-track grid and not `justify-between`
+        ===================================================================
 
-        The split waits until md rather than sm: at 640px the brand text and the
-        Support column together exceed the available width and the brand would
-        shrink into an awkwardly narrow measure. Below md it stacks, which is
-        symmetrical by construction.
+        It used to be `md:justify-between`, which anchored the brand block to
+        the left edge and the Support column to the right. With the Navigate
+        column gone there was nothing in the middle, so at 1440 the brand text
+        ended around x=598 and the Support heading began around x=1105 — a
+        507px hole, measured off a real render, that read as a column having
+        been deleted rather than as a decision.
+
+        It did not shrink on smaller desktops either: the container is capped
+        at `max-w-6xl`, so 1440 and 1920 produced the identical gap while the
+        surrounding page margins grew, which is what made 1920 look worst.
+
+        The fix is a fixed first track rather than a flexible gap. Column one
+        is exactly the brand block's own measure (28rem = `max-w-md`), the gap
+        is fixed, and column two starts immediately after it — at 1088px of
+        content that puts the Support heading at x=544, the horizontal centre.
+        The remaining space falls to the right of the pair, which is where the
+        rest of this site already puts it: every page here is a left-aligned
+        measure inside a wider container (§8 asks for asymmetry, not for
+        centring), so the footer now matches the composition above it instead
+        of fighting it.
+
+        The bottom bar uses the same two tracks, so "Support this space" sits
+        directly under the Support column and the two rows read as one grid.
+
+        Breakpoints: stacked below md; even halves at md, where 28rem plus the
+        gap would leave the second column too narrow for "Community
+        Guidelines"; the fixed measure from lg up.
       */}
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
-        <div className="flex flex-col gap-10 md:flex-row md:justify-between md:gap-12">
+        <div
+          className={cn(
+            "grid grid-cols-1 gap-10",
+            "md:grid-cols-2 md:gap-x-12",
+            "lg:grid-cols-[28rem_1fr] lg:gap-x-24",
+          )}
+        >
           <div className="min-w-0 max-w-md">
             <Logo title={null} className="h-8 w-8 text-ink" />
             <p className="mt-4 font-display text-h4 text-ink">A place to put it down.</p>
@@ -54,10 +81,17 @@ export function Footer() {
           <FooterColumn title="Support" links={SUPPORT_LINKS} />
         </div>
 
+        {/*
+          The same two tracks as the block above, so the copyright sits under
+          the brand and the support line under the Support column. Previously
+          both were pushed to opposite edges by `justify-between` and had the
+          same several-hundred-pixel hole between them.
+        */}
         <div
           className={cn(
-            "mt-12 flex flex-col gap-4 border-t border-rule pt-6",
-            "sm:flex-row sm:items-center sm:justify-between",
+            "mt-12 grid grid-cols-1 gap-4 border-t border-rule pt-6",
+            "md:grid-cols-2 md:items-center md:gap-x-12",
+            "lg:grid-cols-[28rem_1fr] lg:gap-x-24",
           )}
         >
           <p className="text-caption text-ink-soft">
@@ -68,7 +102,8 @@ export function Footer() {
           <Link
             href="/support"
             className={cn(
-              "inline-flex min-h-11 items-center rounded-sm text-body-sm text-ink-soft",
+              "inline-flex min-h-11 items-center justify-self-start rounded-sm",
+              "text-body-sm text-ink-soft",
               "underline decoration-rule-strong underline-offset-4",
               "transition-colors duration-150 ease-out",
               "hover:text-(--color-text-accent) hover:decoration-clay",
@@ -169,6 +204,31 @@ function CrisisStrip() {
   );
 }
 
+/**
+ * The Support column.
+ *
+ * ===========================================================================
+ * Why this is not a micro-label any more
+ * ===========================================================================
+ *
+ * It was an 11px uppercase overline in `ink-soft` over four 14px links, which
+ * is the treatment for one column among four. As the only column beside the
+ * brand block it read as leftover chrome — the visual weight said "site map
+ * fragment" while the position said "half the footer".
+ *
+ * Three changes, all typographic. Nothing was added to fill space: the same
+ * four links, no new ones, and the Navigate column stays gone.
+ *
+ * 1. The clay hairline above the heading. The same motif the crisis strip and
+ *    `/vent/released` open with, so the column is announced the way every
+ *    other section of this site is rather than just starting.
+ * 2. The heading is `text-h4` in full ink, matching "A place to put it down."
+ *    across the grid. Two headings of equal weight on one baseline is what
+ *    makes the row read as two columns instead of a block and an appendix.
+ * 3. Links move from `body-sm`/`ink-soft` to `body`/`ink`. They are the only
+ *    route to four real pages — Crisis Resources among them — and they were
+ *    set quieter than the copyright line.
+ */
 function FooterColumn({
   title,
   links,
@@ -177,18 +237,21 @@ function FooterColumn({
   links: ReadonlyArray<{ href: string; label: string }>;
 }) {
   return (
-    <div>
-      <h2 className="font-sans text-overline font-semibold tracking-[0.085em] text-ink-soft uppercase">
-        {title}
-      </h2>
+    <div className="min-w-0">
+      <span aria-hidden="true" className="block h-px w-10 bg-clay" />
+
+      <h2 className="mt-4 font-display text-h4 text-ink">{title}</h2>
+
       <ul className="mt-3 flex flex-col">
         {links.map((link) => (
           <li key={link.href}>
             <Link
               href={link.href}
               className={cn(
-                "inline-flex min-h-11 items-center rounded-sm text-body-sm text-ink-soft",
-                "transition-colors duration-150 ease-out hover:text-ink",
+                "inline-flex min-h-11 items-center rounded-sm text-body text-ink",
+                "underline decoration-transparent underline-offset-4",
+                "transition-colors duration-150 ease-out",
+                "hover:text-(--color-text-accent) hover:decoration-clay",
                 focusRing,
               )}
             >

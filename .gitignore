@@ -60,3 +60,5 @@ desktop.ini
 # ---- Test / coverage ----
 coverage/
 .nyc_output/
+# Written by the vitest JSON reporter for CI's "the tests actually ran" guard.
+test-results.json

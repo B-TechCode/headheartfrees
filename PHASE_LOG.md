@@ -4178,8 +4178,11 @@ never sent, and there is no column it could have been stored in.
 4. **Single instance only.** Rate-limit buckets are per process and the cleanup
    job has no leader election. Two backends behind a load balancer will not
    enforce limits correctly.
-5. **CI has run once**; one job failed, was fixed, and the re-run is pending.
-   See §9 and the addendum at the end of this log.
+5. **CI has run twice.** Run #1: the wiring job could not run at all. Run #2:
+   the wiring job passed, and the frontend *guard* failed a run in which all 74
+   tests passed. Both defects were in the checking apparatus, not the code it
+   checks; both are fixed and the re-run is pending. See §9 and the two addenda
+   at the end of this log.
 6. **The postcss advisory is inherited.** Build-time only; closing it is a Next
    16 upgrade. §6 and HANDOVER §3.8.
 7. **No screen reader has ever been used on this site.** §7.
@@ -4338,3 +4341,156 @@ was diagnosed, fixed, and the fix verified against a reproduced clean-runner
 state — but **the corrected wiring job has not itself run on CI yet**. It will
 on the next push. Phase 9 §11 item 5 moves from "never run" to "ran once, one
 job fixed, re-run pending".
+
+---
+
+# Phase 9 addendum II — CI ran again, and the guard failed the run it was there to vouch for
+
+The wiring fix worked: the drift job passed on run #2. The frontend job failed
+instead, and **the tests were not the problem**. The log read:
+
+```
+ Test Files  12 passed (12)
+      Tests  74 passed (74)
+...
+Error: Process completed with exit code 1
+```
+
+Seventy-four passing tests, then exit 1. **The guard written to prove the tests
+ran was itself what failed the run.**
+
+## What broke
+
+The step was one script: run the suite through `tee`, then grep the saved output
+to prove the suite was not empty.
+
+```bash
+set -euo pipefail
+npm test 2>&1 | tee test-output.txt
+...
+count=$(grep -oE 'Tests +[0-9]+ passed' test-output.txt | grep -oE '[0-9]+' | head -1)
+echo "Frontend tests run: ${count:-0}"
+if [ "${count:-0}" -lt 50 ]; then ...
+```
+
+Two candidates: `pipefail` taking a non-zero status from the `npm test | tee`
+pipeline, or the count parse missing and the `-lt 50` branch firing. It was
+neither, quite. Reproduced locally rather than reasoned about:
+
+```
+$ npm test 2>&1 | tee test-output.txt >/dev/null; echo "PIPESTATUS=[${PIPESTATUS[@]}]"
+PIPESTATUS=[0 0]
+```
+
+The pipeline is clean, so that candidate is out. And the `-lt 50` branch is out
+too, on the evidence of the CI log itself: **that branch prints two lines**
+(`Frontend tests run: 0` and an `::error::` annotation) and the log contains
+neither. The run died *before* the `echo`.
+
+It died on the assignment. `grep` exits 1 when it matches nothing; under
+`set -o pipefail` that becomes the pipeline's status; under `set -e` a failing
+command substitution in an assignment kills the script — silently, with no
+diagnostic, because the `echo` explaining the count is on the *next* line.
+
+The reason it matched nothing is that the guard read text written for a human.
+On a runner, vitest detects CI and colours its output. Reproduced with
+`FORCE_COLOR=1`, the summary line is not what the regex expects:
+
+```
+$ FORCE_COLOR=1 npm test 2>&1 | grep -a Tests | cat -v
+^[[2m      Tests ^[[22m ^[[1m^[[32m74 passed^[[39m^[[22m^[[90m (74)^[[39m
+```
+
+`Tests +[0-9]+ passed` cannot match `Tests \e[22m \e[1m\e[32m74 passed`. Locally,
+where output is not a TTY and colour stays off, the same guard parses 74 and
+passes — which is why it was written with confidence and shipped.
+
+Isolated to be certain the mechanism is the assignment and not the comparison:
+
+```
+[plain summary]           reached echo, count=[74]   exit=0
+[ANSI-coloured summary]   (no output)                exit=1
+[no match at all]         (no output)                exit=1
+```
+
+## The fix
+
+Stop grepping console output. Assert on a machine-readable report, which is what
+the backend and wiring guards already do — they read failsafe and surefire XML,
+and the frontend guard was the only one parsing text meant for a person.
+
+The suite still runs once, now emitting both reporters, and **with no pipe** so
+the step's exit code is vitest's own:
+
+```yaml
+- name: npm test
+  run: npm test -- --reporter=default --reporter=json --outputFile.json=test-results.json
+```
+
+The guard is its own step reading that report through `node` (guaranteed
+present — `setup-node` ran four steps earlier), and **every branch prints why it
+failed before it exits**. The old one could exit 1 having printed nothing, which
+is precisely what made it expensive to diagnose.
+
+## Verification
+
+Both steps extracted verbatim from `ci.yml` and executed, with `FORCE_COLOR=1`
+and `CI=true` set — the exact condition that failed on the runner:
+
+```
+### STEP: npm test (FORCE_COLOR=1, as on a runner)
+JSON report written to .../test-results.json
+npm test step exit=0
+
+### STEP: Guard
+Frontend tests run: 74 (74 passed, 0 failed)
+guard step exit=0
+```
+
+Every guard branch exercised against a crafted report:
+
+| Condition | Output | Exit |
+|---|---|---|
+| report missing | `::error::Vitest wrote no JSON report - the suite did not run.` | 1 |
+| report corrupt | `::error::Vitest JSON report is unreadable: ...` | 1 |
+| discovery collapsed to 3 tests | `Frontend tests run: 3` + `::error::Only 3 ... expected at least 50.` | 1 |
+| report format changed | `::error::Vitest report has no numTotalTests - ... this guard needs updating.` | 1 |
+| real green suite | `Frontend tests run: 74 (74 passed, 0 failed)` | 0 |
+
+And the guard has not been softened into uselessness — a genuinely failing test
+still fails the job at the test step, before the guard is reached:
+
+```
+$ # with one deliberately failing test added
+npm test step exit with a failing test = 1
+```
+
+No `|| true`, no `continue-on-error`, and no swallowed exit code was added; the
+file's own standing rule against them still holds.
+
+## What this says
+
+The previous addendum's lesson was "something that appeared to run and did not."
+This one is its mirror: **something that ran, and the check on it said otherwise.**
+
+A guard that turns a green suite red is worse than no guard, because it spends
+the credibility the guards exist to build — the next red frontend job is now a
+little more likely to be read as "the guard again" than as a real failure. Two
+specific things caused it, both worth keeping:
+
+1. **The guard was coupled to human-readable output.** ANSI colour is a
+   presentation detail that changes with the environment, and the guard's
+   correctness depended on it. The machine-readable report is a contract; the
+   console summary never was.
+2. **`set -euo pipefail` makes a non-matching `grep` fatal and silent.** The
+   diagnostic was written on the line *after* the one that could die. A guard
+   must print its reason before it can exit, not after.
+
+Both failures so far have been in the checking apparatus rather than the code it
+checks, and both passed locally for environment-specific reasons — a populated
+`target/`, and a terminal without colour. That is now a pattern worth naming:
+**the guards need reproducing under runner conditions, not just running.**
+
+**Status change:** run #2 — wiring fixed and green, frontend guard fixed here.
+The corrected frontend job has not itself run on CI yet. Phase 9 §11 item 5 moves
+to "ran twice, two guard defects fixed, re-run pending".

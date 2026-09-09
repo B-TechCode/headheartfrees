@@ -21,7 +21,13 @@ name: CI
 #      still printing BUILD SUCCESS.
 #   2. Explicit assertions on the test counts (see "guard" steps). If the suite
 #      silently stops discovering tests, the count collapses and the build
-#      fails rather than passing with zero.
+#      fails rather than passing with zero. Every guard reads a machine-readable
+#      report - surefire/failsafe XML, vitest JSON - and never the console
+#      summary: a guard that greps human-readable output is coupled to ANSI
+#      colour and formatting, which differ between a runner and a laptop. That
+#      is not hypothetical; it failed a green 74-test suite here once, and any
+#      guard added below must print why it failed BEFORE it exits, since
+#      `set -euo pipefail` makes a non-matching grep both fatal and silent.
 #   3. No `continue-on-error`, no `|| true`, and no step that swallows an exit
 #      code anywhere in this file.
 #
@@ -104,25 +110,55 @@ jobs:
 
       - run: npm run lint
       - run: npm run typecheck
-      # One run, checked in place. This previously ran `npm test`, then ran it
-      # a second time inside the guard purely to grep the output - doubling the
-      # slowest frontend step and giving a flaky suite two chances to disagree
-      # with itself.
-      - name: npm test, and prove it was not empty
+      # The suite runs ONCE, and writes a machine-readable report alongside the
+      # human one. No pipe, so this step's exit code is vitest's own: a failing
+      # suite still fails here, which is the only thing this step is for.
+      #
+      # The `--reporter=json` half exists because of the bug the second CI run
+      # found. The guard used to grep the console summary for "Tests 74 passed".
+      # On a runner, vitest detects CI and colours its output, so that line is
+      # really `\e[2m Tests \e[22m \e[1m\e[32m74 passed\e[39m` - the regex
+      # matched nothing, grep exited 1, and under `set -o pipefail` the
+      # `count=$(...)` assignment died before it could print a single word.
+      # A green 74-test suite went red with no diagnostic at all.
+      - name: npm test
+        run: npm test -- --reporter=default --reporter=json --outputFile.json=test-results.json
+
+      # The guard on the guard, reading the report rather than the console.
+      # Same shape as the backend job: assert on the machine-readable artefact
+      # the run leaves behind, never on text written for a human to look at.
+      #
+      # Node is guaranteed here - setup-node ran four steps ago - and every
+      # branch below prints why it failed before it exits. The previous version
+      # could exit 1 having printed nothing, which is what made it expensive.
+      - name: Guard — the frontend tests actually ran
         run: |
           set -euo pipefail
-          npm test 2>&1 | tee test-output.txt
-          if grep -qE "No test files found" test-output.txt; then
-            echo "::error::Vitest found no test files."
-            exit 1
-          fi
-          # Backstop if discovery breaks without printing that line.
-          count=$(grep -oE 'Tests +[0-9]+ passed' test-output.txt | grep -oE '[0-9]+' | head -1)
-          echo "Frontend tests run: ${count:-0}"
-          if [ "${count:-0}" -lt 50 ]; then
-            echo "::error::Only ${count:-0} frontend tests ran; expected at least 50."
-            exit 1
-          fi
+          node -e '
+            const fs = require("fs");
+            const file = "test-results.json";
+            if (!fs.existsSync(file)) {
+              console.log("::error::Vitest wrote no JSON report - the suite did not run.");
+              process.exit(1);
+            }
+            let report;
+            try {
+              report = JSON.parse(fs.readFileSync(file, "utf8"));
+            } catch (err) {
+              console.log(`::error::Vitest JSON report is unreadable: ${err.message}`);
+              process.exit(1);
+            }
+            const total = report.numTotalTests;
+            if (typeof total !== "number") {
+              console.log("::error::Vitest report has no numTotalTests - the report format changed and this guard needs updating.");
+              process.exit(1);
+            }
+            console.log(`Frontend tests run: ${total} (${report.numPassedTests} passed, ${report.numFailedTests} failed)`);
+            if (total < 50) {
+              console.log(`::error::Only ${total} frontend tests ran; expected at least 50.`);
+              process.exit(1);
+            }
+          '
 
       # Build last: it is the slowest step and the cheap checks should fail
       # first. The build args mirror the Dockerfile's defaults, so CI compiles

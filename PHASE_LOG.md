@@ -4113,6 +4113,12 @@ workflow is syntactically valid, structurally checked, and **unrun**. The first
 push will be its first real test, and that is the honest status. The count guards
 are what make a false green unlikely, not impossible.
 
+> **Superseded 2026-09-08.** It has now run. Three jobs passed and the wiring
+> job failed — it invoked `surefire:test` directly, which compiles nothing, so
+> on a fresh runner there were no test classes to find. See the addendum at the
+> end of this log. The sentence above about the first push being the real test
+> turned out to be the most accurate line in the section.
+
 ## 10. The rule, verified end to end in a browser
 
 The last check, and the one the whole project rests on. Not a unit test: nine
@@ -4172,7 +4178,8 @@ never sent, and there is no column it could have been stored in.
 4. **Single instance only.** Rate-limit buckets are per process and the cleanup
    job has no leader election. Two backends behind a load balancer will not
    enforce limits correctly.
-5. **CI has never run.** See §9.
+5. **CI has run once**; one job failed, was fixed, and the re-run is pending.
+   See §9 and the addendum at the end of this log.
 6. **The postcss advisory is inherited.** Build-time only; closing it is a Next
    16 upgrade. §6 and HANDOVER §3.8.
 7. **No screen reader has ever been used on this site.** §7.
@@ -4244,3 +4251,90 @@ Screen reader testing (§7), load and concurrency testing, backups and
 monitoring, the two placeholders, the trusted-proxy address, and the HANDOVER §3
 launch blockers. None of these are code problems and none can be closed from
 inside this repository.
+
+---
+
+# Phase 9 addendum — CI ran, and the drift check was the job that could not run
+
+**2026-09-08, after the first push.** Three jobs green; **wiring** failed.
+
+## What broke
+
+```
+- name: Drift check
+  run: mvn -B -Dtest=EnvExampleComposeDriftTest -DfailIfNoSpecifiedTests=false surefire:test
+```
+
+Two defects in one line.
+
+**1. `surefire:test` compiles nothing.** Invoking a plugin goal directly runs
+only that goal, skipping the lifecycle phases before it. On a fresh runner
+`target/test-classes` does not exist, so surefire had nothing to find. It passed
+here for the worst possible reason: a `target/` left populated by an earlier
+build. The job was reading the output of a compilation that CI never performed.
+
+**2. The suppression property was misspelled and had never taken effect.**
+Surefire reads `-Dsurefire.failIfNoSpecifiedTests`, not
+`-DfailIfNoSpecifiedTests`. The error message says so explicitly — and that
+message had never been seen, because the condition it guards had never been
+reached locally.
+
+Reproduced on a deliberately emptied `target/`:
+
+```
+[INFO] No tests to run.
+[ERROR] No tests matching pattern "EnvExampleComposeDriftTest" were executed!
+        (Set -Dsurefire.failIfNoSpecifiedTests=false to ignore this error.)
+```
+
+## The fix
+
+```
+run: mvn -B -Dtest=EnvExampleComposeDriftTest test
+```
+
+The `test` lifecycle phase compiles main and test sources itself, so there is no
+prior phase to remember. Verified on the same emptied `target/`: 79 main and 36
+test sources compiled, 2 drift assertions run, exit 0, and the report the guard
+step reads present with `tests="2"`.
+
+**The suppression property is gone entirely rather than corrected.** Neither
+spelling belongs there. If that class is ever renamed or deleted, this job
+*should* fail rather than pass having run nothing — which is the whole point of
+the job.
+
+## The same class of mistake, elsewhere
+
+Two more found by auditing every job for anything assuming prior state:
+
+- **`bc` in the backend guard.** `paste -sd+ - | bc` assumes bc is installed. It
+  is on GitHub's runners, and it is absent from the shell this was written in —
+  a guard that fails because its own arithmetic is missing is the same
+  assumption in a different coat. Replaced with `awk`, exercised against the
+  real failsafe reports: counts 114.
+- **The frontend suite ran twice.** `npm test`, then `npm test` again inside the
+  guard purely to grep the output — doubling the slowest step and giving a flaky
+  suite two chances to disagree with itself. Now one run through `tee`, with a
+  count backstop. Exercised against real output: parses 74.
+
+The other jobs are clean. `mvn verify` and `docker compose build` are whole
+lifecycles, and the frontend scripts were re-run with `.next` deleted to confirm
+none of them depends on a previous build.
+
+## What this says
+
+**The check written to catch configuration drift was the one job misconfigured**,
+and it failed in exactly the way this project keeps finding: something that
+appeared to run and did not. It had "passed" locally every time, on state a
+fresh machine does not have.
+
+Phase 9 §9 recorded that CI was "written, never executed" and that "the first
+push will be its first real test". It was, and it found a real defect on the
+first attempt — which is the argument for the count guards, since a wrong
+`-Dtest` pattern would otherwise have produced a green job that ran nothing.
+
+**Status change:** CI has now executed. Three jobs pass; the fourth failed,
+was diagnosed, fixed, and the fix verified against a reproduced clean-runner
+state — but **the corrected wiring job has not itself run on CI yet**. It will
+on the next push. Phase 9 §11 item 5 moves from "never run" to "ran once, one
+job fixed, re-run pending".

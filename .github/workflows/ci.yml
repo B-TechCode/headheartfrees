@@ -71,8 +71,11 @@ jobs:
             echo "::error::No failsafe-reports directory - the integration tests did not run."
             exit 1
           fi
+          # awk, not `paste | bc`: bc is not guaranteed to be present, and a
+          # guard that fails because its own arithmetic is missing is the
+          # same class of assumption as the bug this run found.
           count=$(grep -ho 'tests="[0-9]*"' target/failsafe-reports/*.xml \
-                  | grep -o '[0-9]*' | paste -sd+ - | bc)
+                  | grep -o '[0-9]*' | awk '{n += $1} END {print n + 0}')
           echo "Integration tests run: ${count:-0}"
           if [ "${count:-0}" -lt 100 ]; then
             echo "::error::Only ${count:-0} integration tests ran; expected at least 100."
@@ -101,15 +104,23 @@ jobs:
 
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
-
-      - name: Guard — the test suite is not empty
+      # One run, checked in place. This previously ran `npm test`, then ran it
+      # a second time inside the guard purely to grep the output - doubling the
+      # slowest frontend step and giving a flaky suite two chances to disagree
+      # with itself.
+      - name: npm test, and prove it was not empty
         run: |
           set -euo pipefail
-          output=$(npm test 2>&1)
-          echo "$output" | tail -5
-          if echo "$output" | grep -qE "No test files found"; then
+          npm test 2>&1 | tee test-output.txt
+          if grep -qE "No test files found" test-output.txt; then
             echo "::error::Vitest found no test files."
+            exit 1
+          fi
+          # Backstop if discovery breaks without printing that line.
+          count=$(grep -oE 'Tests +[0-9]+ passed' test-output.txt | grep -oE '[0-9]+' | head -1)
+          echo "Frontend tests run: ${count:-0}"
+          if [ "${count:-0}" -lt 50 ]; then
+            echo "::error::Only ${count:-0} frontend tests ran; expected at least 50."
             exit 1
           fi
 
@@ -143,9 +154,25 @@ jobs:
       # It runs in the backend suite above too. It is repeated here as its own
       # named job so the failure reads as "wiring drift" in the checks list
       # rather than being buried in a 150-test run.
+      # `test`, NOT `surefire:test`.
+      #
+      # This is the bug the first CI run found. Invoking the surefire plugin
+      # goal directly runs ONLY that goal: it compiles nothing. On a fresh
+      # runner `target/test-classes` does not exist, so surefire found no tests
+      # and failed. It passed locally for the worst possible reason - a
+      # `target/` left populated by an earlier build.
+      #
+      # The `test` lifecycle phase compiles main and test sources first, so
+      # there is no prior phase to remember. `-Dtest=` still narrows it.
+      #
+      # The suppression property is deliberately GONE. The original passed
+      # `-DfailIfNoSpecifiedTests=false`, which is not the property surefire
+      # reads - that is `-Dsurefire.failIfNoSpecifiedTests` - so it never took
+      # effect. Neither spelling belongs here: if this class is renamed or
+      # deleted, this job SHOULD fail rather than pass having run nothing.
       - name: Drift check
         working-directory: backend
-        run: mvn -B -Dtest=EnvExampleComposeDriftTest -DfailIfNoSpecifiedTests=false surefire:test
+        run: mvn -B -Dtest=EnvExampleComposeDriftTest test
 
       - name: Guard — the drift check was not silently skipped
         working-directory: backend

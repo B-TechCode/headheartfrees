@@ -504,6 +504,56 @@ npm run dev
 
 Postgres is required — the backend will not start without it.
 
+### If `npm run dev` serves a site where nothing works, read this before debugging a component
+
+**`next.config.ts` sends a Content-Security-Policy, and `headers()` applies to
+`next dev` exactly as it applies to a production build.** The dev server is not
+the same application as a build: it runs React Fast Refresh, whose runtime calls
+`eval`. So the policy is built per environment, and the development branch adds
+three things production does not get — `'unsafe-eval'` on `script-src`,
+`'unsafe-inline'` on `style-src`, and `ws: wss:` on `connect-src`.
+
+**Remove `'unsafe-eval'` from the development branch and the entire client
+bundle stops booting.** The `eval` call happens while a webpack module factory
+in `main-app.js` is still executing, so the throw kills the chunk rather than
+one feature. No client component anywhere on the site hydrates.
+
+**It does not present as a CSP problem. It presents as a component bug**, and
+usually as a bug in whatever page you happen to open — which is why this note is
+here and not in the security section. The server HTML still renders, so every
+page looks right; the site quietly degrades to what it would be with JavaScript
+switched off, and most of this site is static content that survives that. `/vent`
+does not: a textarea with no React `value` controlling it keeps typed text the
+way plain HTML does, so the box accepts writing while the character counter sits
+at `0 / 2000` and "Release & Let Go" never enables. It reads exactly like a
+broken `onChange` handler in `VentComposer`. `VentComposer` is never mounted.
+
+This happened, on 10 September 2026, and cost three commits before anyone
+noticed. See the last entry in [PHASE_LOG.md](PHASE_LOG.md) for the full account.
+
+**Confirming it takes one line in the browser console.** Ask a DOM node whether
+React knows about it:
+
+```js
+Object.keys(document.querySelector('textarea')).filter(k => k.startsWith('__react'))
+```
+
+React attaches `__reactFiber$…`, `__reactProps$…` and `__reactEvents$…` to every
+host node it mounts. An empty array means the component was never mounted, and
+you should stop reading component source and look at the console for a CSP
+`EvalError` from `@next/react-refresh-utils`. A non-empty array means React is
+running and the fault really is in the component.
+
+**When you change the CSP** — and you will, for a font, an analytics script or an
+embed — add what you need to the production directives and leave the development
+relaxations alone. `next.config.test.ts` pins both halves: the production policy
+as one exact string, so a development relaxation cannot leak into a shipped
+header, and the development `'unsafe-eval'`, so this outage cannot come back
+silently. If it fails, it is telling you which of those two you just did.
+
+**Never add `'unsafe-eval'` to production.** It hands an injected string the
+ability to become code, which is most of what that header exists to prevent.
+
 ### Tests
 
 ```
@@ -512,8 +562,9 @@ cd backend
                      # PostgreSQL 16.
 
 cd frontend
-npm test             # 74 tests. Vitest + Testing Library + jsdom. No browser,
-                     # no backend, no Docker.
+npm test             # 92 tests. Vitest + Testing Library + jsdom. No browser,
+                     # no backend, no Docker. One file, next.config.test.ts,
+                     # is not a component test: it pins the CSP above.
 npm run typecheck
 npm run lint
 ```

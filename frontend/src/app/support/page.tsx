@@ -9,6 +9,7 @@ import {
   SUPPORT_UPI_ID,
   SUPPORT_UPI_LINK,
 } from "@/lib/support";
+import { SectionRule } from "@/components/ui/SectionRule";
 
 export const metadata: Metadata = {
   title: "Support this space",
@@ -60,7 +61,9 @@ export default function SupportPage() {
       />
 
       <section aria-labelledby="what-heading" className="mt-14">
-        <h2 id="what-heading" className="font-display text-h3 text-ink">
+        <SectionRule />
+
+        <h2 id="what-heading" className="mt-4 font-display text-h3 text-ink">
           What it pays for
         </h2>
 
@@ -86,7 +89,9 @@ export default function SupportPage() {
       </section>
 
       <section aria-labelledby="not-heading" className="mt-12">
-        <h2 id="not-heading" className="font-display text-h3 text-ink">
+        <SectionRule />
+
+        <h2 id="not-heading" className="mt-4 font-display text-h3 text-ink">
           What it does not buy
         </h2>
 
@@ -98,7 +103,9 @@ export default function SupportPage() {
       </section>
 
       <section aria-labelledby="how-heading" className="mt-12">
-        <h2 id="how-heading" className="font-display text-h3 text-ink">
+        <SectionRule />
+
+        <h2 id="how-heading" className="mt-4 font-display text-h3 text-ink">
           How to give
         </h2>
 

@@ -5,6 +5,7 @@ import { DonationSection } from "@/components/sections/DonationSection";
 import { Prose } from "@/components/ui/Prose";
 import { cn } from "@/lib/cn";
 import { focusRing } from "@/components/ui/styles";
+import { SectionRule } from "@/components/ui/SectionRule";
 
 export const metadata: Metadata = {
   title: "About",
@@ -76,7 +77,9 @@ export default function AboutPage() {
       </Prose>
 
       <section aria-labelledby="principles-heading" className="mt-16 border-t border-rule pt-10">
-        <h2 id="principles-heading" className="font-display text-h2 text-ink">
+        <SectionRule />
+
+        <h2 id="principles-heading" className="mt-4 font-display text-h2 text-ink">
           What this holds to
         </h2>
 
@@ -91,7 +94,9 @@ export default function AboutPage() {
       </section>
 
       <section aria-labelledby="honest-heading" className="mt-16 border-t border-rule pt-10">
-        <h2 id="honest-heading" className="font-display text-h3 text-ink">
+        <SectionRule />
+
+        <h2 id="honest-heading" className="mt-4 font-display text-h3 text-ink">
           What we cannot tell you yet
         </h2>
         <div className="mt-3 max-w-[68ch]">

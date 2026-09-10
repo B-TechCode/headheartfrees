@@ -6,6 +6,7 @@ import { Callout } from "@/components/ui/Callout";
 import { INDIA_HELPLINES, INTERNATIONAL_HELPLINES } from "@/lib/helplines";
 import { cn } from "@/lib/cn";
 import { focusRing } from "@/components/ui/styles";
+import { SectionRule } from "@/components/ui/SectionRule";
 
 export const metadata: Metadata = {
   title: "Crisis resources",
@@ -38,14 +39,18 @@ export default function CrisisResourcesPage() {
       />
 
       <section aria-labelledby="india-heading" className="mt-12">
-        <h2 id="india-heading" className="font-display text-h3 text-ink">
+        <SectionRule />
+
+        <h2 id="india-heading" className="mt-4 font-display text-h3 text-ink">
           India
         </h2>
         <HelplineList helplines={INDIA_HELPLINES} />
       </section>
 
       <section aria-labelledby="international-heading" className="mt-12">
-        <h2 id="international-heading" className="font-display text-h3 text-ink">
+        <SectionRule />
+
+        <h2 id="international-heading" className="mt-4 font-display text-h3 text-ink">
           Outside India
         </h2>
         <HelplineList helplines={INTERNATIONAL_HELPLINES} />
@@ -69,7 +74,9 @@ export default function CrisisResourcesPage() {
       </section>
 
       <section aria-labelledby="emergency-heading" className="mt-14">
-        <h2 id="emergency-heading" className="font-display text-h3 text-ink">
+        <SectionRule />
+
+        <h2 id="emergency-heading" className="mt-4 font-display text-h3 text-ink">
           When to call emergency services instead
         </h2>
 

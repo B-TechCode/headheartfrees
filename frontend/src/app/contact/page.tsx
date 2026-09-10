@@ -9,6 +9,7 @@ import {
   CONTACT_EMAIL_IS_PLACEHOLDER,
   CONTACT_MAILTO,
 } from "@/lib/contact";
+import { SectionRule } from "@/components/ui/SectionRule";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -81,7 +82,9 @@ export default function ContactPage() {
       ) : null}
 
       <section aria-labelledby="email-heading" className="mt-12">
-        <h2 id="email-heading" className="font-display text-h3 text-ink">
+        <SectionRule />
+
+        <h2 id="email-heading" className="mt-4 font-display text-h3 text-ink">
           Email
         </h2>
 
@@ -109,7 +112,9 @@ export default function ContactPage() {
       </section>
 
       <section aria-labelledby="reasons-heading" className="mt-12">
-        <h2 id="reasons-heading" className="font-display text-h3 text-ink">
+        <SectionRule />
+
+        <h2 id="reasons-heading" className="mt-4 font-display text-h3 text-ink">
           Good reasons to write
         </h2>
 
@@ -129,7 +134,9 @@ export default function ContactPage() {
       </section>
 
       <section aria-labelledby="not-heading" className="mt-12 border-t border-rule pt-8">
-        <h2 id="not-heading" className="font-display text-h3 text-ink">
+        <SectionRule />
+
+        <h2 id="not-heading" className="mt-4 font-display text-h3 text-ink">
           What this inbox cannot do
         </h2>
 

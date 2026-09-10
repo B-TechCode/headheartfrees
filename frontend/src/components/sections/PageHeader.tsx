@@ -31,7 +31,19 @@ export function PageHeader({
 
       <h1 className={cn("font-display text-h1 text-ink", eyebrow ? "mt-3" : null)}>{title}</h1>
 
-      {lede ? <p className="mt-4 text-body-lg text-ink-soft">{lede}</p> : null}
+      {/*
+        The lede is a standfirst, not body copy, and now reads as one: up a
+        step to `text-h4` (18px) and to full `ink` rather than `ink-soft`.
+
+        `leading-relaxed` is deliberate. The `h4` token carries a 1.36 line
+        height because it was scaled for a heading, and several of these ledes
+        run four or five lines — /support's is sixty words. 18px at 1.625 is
+        29px of leading against the 28.5px the old `body-lg` had, so the
+        paragraph gains size and weight without the rhythm tightening under it.
+
+        Contrast goes up, not down: ink-soft 9.30 to ink 15.34 on `surface`.
+      */}
+      {lede ? <p className="mt-4 text-h4 leading-relaxed text-ink">{lede}</p> : null}
 
       {children}
     </header>

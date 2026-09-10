@@ -4,6 +4,7 @@ import { Logo } from "@/components/ui/Logo";
 import { focusRing } from "@/components/ui/styles";
 import { FOOTER_HELPLINES } from "@/lib/helplines";
 import { SOCIAL_LINKS, type SocialIconName } from "@/lib/social";
+import { SectionRule } from "@/components/ui/SectionRule";
 
 /**
  * PROJECT_BRIEF.md §7: the footer has no Navigate column. Home, Vent and About
@@ -26,7 +27,25 @@ const SUPPORT_LINKS = [
 
 export function Footer() {
   return (
-    <footer className="app-layer mt-auto border-t border-rule bg-surface">
+    /*
+      The footer body sits on `surface-sunk`, not `surface`, so the page ends
+      on a distinct zone rather than running out.
+
+      This also sharpens the crisis strip rather than dulling it. The strip is
+      `surface-raised` and was a 1.07:1 step off the `surface` around it —
+      barely a boundary at all. Against `surface-sunk` that step is 1.17:1, so
+      the strip reads as raised out of the footer instead of merely sitting in
+      it. The strip itself is untouched.
+
+      Nothing in this block uses `ink-faint`, which is the token that would
+      have failed here: it is 4.12:1 on `surface-sunk`, under the 4.5 AA needs
+      for normal text. The only `ink-faint` in this file is inside the crisis
+      strip, which stays on `surface-raised` where it measures 4.82:1.
+
+      Measured on `surface-sunk` #EFEAE1: ink 14.05, ink-soft 8.52, clay-deep
+      (every hover) 5.52, clay hairline 3.79 against a 3.0 graphic threshold.
+    */
+    <footer className="app-layer mt-auto border-t border-rule bg-surface-sunk">
       <CrisisStrip />
 
       {/*
@@ -266,7 +285,7 @@ function FooterColumn({
 }) {
   return (
     <div className="min-w-0">
-      <span aria-hidden="true" className="block h-px w-10 bg-clay" />
+      <SectionRule />
 
       <h2 className="mt-4 font-display text-h4 text-ink">{title}</h2>
 

@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { SectionRule } from "@/components/ui/SectionRule";
 
 /**
  * Three steps.
@@ -31,9 +32,11 @@ const STEPS = [
 
 export function HowItWorks() {
   return (
-    <section aria-labelledby="how-heading" className="border-b border-rule">
+    <section aria-labelledby="how-heading" className="border-b border-rule bg-surface">
       <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
-        <h2 id="how-heading" className="font-display text-h2 text-ink">
+        <SectionRule />
+
+        <h2 id="how-heading" className="mt-6 font-display text-h2 text-ink">
           How it works
         </h2>
 

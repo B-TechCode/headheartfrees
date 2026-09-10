@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Logo } from "@/components/ui/Logo";
 import { focusRing } from "@/components/ui/styles";
+import { SectionRule } from "@/components/ui/SectionRule";
 
 /**
  * Home hero.
@@ -18,14 +19,41 @@ import { focusRing } from "@/components/ui/styles";
  */
 export function Hero() {
   return (
-    <section className="border-b border-rule">
+    /*
+      `surface-raised`, which starts the home page's alternation: navbar
+      `surface`, hero `raised`, How It Works `surface`, Promises `raised`,
+      the close `surface`, then the crisis strip `raised` above the sunk
+      footer. Every seam down the page is a step.
+
+      Starting on `raised` rather than `surface` is what makes that work. The
+      other phasing — hero on `surface` — lands `raised` against `raised` at
+      the crisis strip, flattening the one boundary that is not allowed to go
+      soft. Contrast improves here rather than degrading: on #FFFCF7 ink is
+      16.45 and ink-soft 9.97, against 15.34 and 9.30 on `surface`.
+    */
+    <section className="border-b border-rule bg-surface-raised">
       <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:grid lg:grid-cols-12 lg:gap-8 lg:px-8 lg:py-28">
         <div className="lg:col-span-7">
-          <span aria-hidden="true" className="block h-px w-12 bg-clay" />
+          <SectionRule />
 
-          <h1 className="mt-6 font-display text-display text-ink">Somewhere to put it down.</h1>
+          {/*
+            The one piece of colour in the type on this page, and it is the
+            last word rather than a phrase: "put it down" is what the product
+            does, and the sentence resolves on it.
 
-          <p className="mt-6 max-w-xl text-body-lg text-ink-soft">
+            `clay-deep` (--color-text-accent), not `clay`. At `text-display`
+            this is 40-64px, so WCAG treats it as large text needing 3.0 —
+            `clay` would technically clear that at 4.14:1, but globals.css §1
+            holds that clay is never a text colour anywhere on this site, and
+            one hero is not a reason to make the rule conditional. clay-deep
+            measures 6.03:1 on `surface` and 6.46:1 on the `surface-raised`
+            this hero actually sits on.
+          */}
+          <h1 className="mt-6 font-display text-display text-ink">
+            Somewhere to put it <span className="text-(--color-text-accent)">down.</span>
+          </h1>
+
+          <p className="mt-6 max-w-xl text-h4 leading-relaxed text-ink">
             Write what&rsquo;s weighing on you, then let it go. The words never leave your
             browser. Nothing is sent, nothing is stored, and no one reads them.
           </p>

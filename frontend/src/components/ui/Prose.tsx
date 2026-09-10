@@ -19,8 +19,17 @@ export function Prose({ children, className }: { children: ReactNode; className?
     <div
       className={cn(
         "max-w-[68ch]",
-        // Headings
+        // Headings.
+        //
+        // The h2 rule is the site-wide section motif (see ui/SectionRule), drawn
+        // here as a `::before` rather than as an inserted element: these pages
+        // hand Prose bare `<h2>` tags, and threading a component through every
+        // one of the fourteen headings across /privacy and /community-guidelines
+        // would put markup in the copy to carry decoration. Empty `content`, so
+        // there is nothing for a screen reader to announce.
         "[&_h2]:font-display [&_h2]:text-h3 [&_h2]:text-ink [&_h2]:mt-12 [&_h2]:mb-3",
+        "[&_h2]:before:content-[''] [&_h2]:before:mb-4 [&_h2]:before:block",
+        "[&_h2]:before:h-px [&_h2]:before:w-10 [&_h2]:before:bg-clay",
         "[&_h3]:font-display [&_h3]:text-h4 [&_h3]:text-ink [&_h3]:mt-8 [&_h3]:mb-2",
         // Body
         "[&_p]:text-body [&_p]:text-ink-soft [&_p]:mt-4",

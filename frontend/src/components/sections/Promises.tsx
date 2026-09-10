@@ -1,3 +1,5 @@
+import { SectionRule } from "@/components/ui/SectionRule";
+
 /**
  * What this promises.
  *
@@ -40,7 +42,7 @@ export function Promises() {
     <section aria-labelledby="promises-heading" className="border-b border-rule bg-surface-raised">
       <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
         <div className="max-w-2xl">
-          <span aria-hidden="true" className="block h-px w-12 bg-clay" />
+          <SectionRule />
           <h2 id="promises-heading" className="mt-6 font-display text-h2 text-ink">
             What this promises
           </h2>

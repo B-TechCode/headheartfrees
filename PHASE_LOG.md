@@ -4734,3 +4734,187 @@ Two open, one closed:
 | `CONTACT_EMAIL` | closed earlier today |
 | `SUPPORT_UPI_ID` | open — owner's decision, HANDOVER §2.7 and §2.8 |
 | `SOCIAL_LINKS` | **open, live, and invisible to visitors** — HANDOVER §2.9 |
+
+---
+
+# Post-phase-9 — footer surface and typographic rhythm
+
+Date: 2026-09-10. Not a phase. Two changes: the footer moves to its own
+surface, and the site gets vertical rhythm it did not have. **No palette
+change.** Not one value in globals.css §1 was touched; everything below is made
+out of tokens that already existed.
+
+## 1. The footer sits on `surface-sunk`
+
+`<footer>` was `bg-surface` — the same colour as the page above it, so the site
+did not end so much as stop. It is now `bg-surface-sunk`.
+
+**The crisis strip gains presence rather than losing it**, which was the risk
+worth checking. The strip is `surface-raised` and was a 1.07:1 step off the
+`surface` around it — barely a boundary. Against `surface-sunk` that step is
+1.17:1. The strip itself was not touched.
+
+### Measured, not asserted
+
+Every text element on the new surface, read off the rendered DOM via
+`getComputedStyle` in headless Chrome — composited colours, not the hex values
+in the stylesheet:
+
+| Element | Token | on `surface` (before) | on `surface-sunk` (after) | AA needs | |
+|---|---|---|---|---|---|
+| Support links | `ink` | 15.34 | **14.05** | 4.5 | AAA |
+| "A place to put it down." / "Support" | `ink` | 15.34 | **14.05** | 4.5 | AAA |
+| Brand paragraph | `ink-soft` | 9.30 | **8.52** | 4.5 | AAA |
+| Copyright, 13px | `ink-soft` | 9.30 | **8.52** | 4.5 | AAA |
+| "Support this space", 15px | `ink-soft` | 9.30 | **8.52** | 4.5 | AAA |
+| Social icon strokes | `ink-soft` | 9.30 | **8.52** | 3.0 graphic | pass |
+| Every hover state | `clay-deep` | 6.03 | **5.52** | 4.5 | AA |
+| Support-column hairline | `clay` | 4.14 | **3.79** | 3.0 graphic | pass |
+| Top border | `rule` | 1.32 | **1.20** | — | decorative |
+| Support-line underline | `rule-strong` | 1.75 | **1.60** | — | decorative |
+
+**`ink-faint` was the token at risk and it is not exposed here.** It measures
+4.12:1 on `surface-sunk`, under the 4.5 AA wants for normal text. The only
+`ink-faint` in `Footer.tsx` is inside the crisis strip, which stays on
+`surface-raised` where it is 4.82:1. Checked before the change, not after.
+
+The one number that drops without a floor to clear is `rule-strong` at 1.60, a
+decorative underline. The link it decorates is identified by its `ink-soft`
+text at 8.52:1, not by that rule, so SC 1.4.11 is not in play.
+
+## 2. Rhythm
+
+### 2.1 The section rule is now a component
+
+`ui/SectionRule` — the 1px, 40px clay hairline. The motif already existed and
+was hand-copied in six places at two different widths. It is now one component,
+applied to every `h2`-level section heading on Home, About, Support, Contact,
+Crisis Resources, Community Guidelines and Privacy.
+
+**Side effect worth naming:** the hero's and Promises' rules were `w-12` (48px)
+and are now `w-10` (40px), because unifying the motif means picking one width
+and 40px is what the crisis strip and the footer column already used. Nobody
+asked for the hero's rule to shrink; it is a consequence of consolidating, and
+it is one prop away from being reversible.
+
+`CrisisStrip`, `CrisisPanel`, `/vent`, `/vent/released` and `/auth/callback`
+still draw the span by hand. Those files were deliberately not opened: the
+crisis surfaces are not to be restyled and the vent pages stay quiet. The
+markup is byte-identical, so there is nothing to see.
+
+### 2.2 Long-form headings use a pseudo-element
+
+`/privacy` and `/community-guidelines` hand `Prose` bare `<h2>` tags — fourteen
+of them. Threading a component through each would put decoration markup into
+the copy, so `Prose` grows a `::before` rule on `h2` instead. Empty `content`,
+so there is nothing for a screen reader to announce.
+
+### 2.3 Ledes read as standfirsts
+
+`PageHeader`'s lede and the hero's: `body-lg`/`ink-soft` becomes
+`h4`/`leading-relaxed`/`ink`. Measured on the rendered page: **18px,
+line-height 29.25px, 15.34:1** — up from 17px at 28.56px and 9.30:1.
+
+`leading-relaxed` is deliberate. The `h4` token carries 1.36 because it was
+scaled for a heading, and `/support`'s lede runs sixty words; at 1.36 that is a
+wall. 1.625 puts the leading within 0.7px of what `body-lg` had, so the
+paragraph gains size and weight without the rhythm tightening under it.
+
+### 2.4 The home page alternates, and the phasing is not arbitrary
+
+```
+navbar          surface
+hero            surface-raised
+How it works    surface
+Promises        surface-raised
+Closing         surface
+crisis strip    surface-raised
+footer          surface-sunk
+```
+
+Every seam is a step. **The hero had to start on `raised` for that to work.**
+Phasing it the other way — hero on `surface` — lands `raised` against `raised`
+at the crisis strip and flattens the one boundary that is not allowed to go
+soft. Contrast on the hero improves rather than degrading: ink 15.34 to 16.45,
+ink-soft 9.30 to 9.97.
+
+**Only the home page alternates.** The seven static pages are a single
+`max-w-3xl` column, not full-bleed sections; banding them would mean
+re-wrapping every section and redoing the padding and measure on each. They get
+their rhythm from the hairlines instead. This was a scoping decision taken with
+the owner before building, not a shortfall discovered afterwards.
+
+### 2.5 One word of colour in the hero
+
+`Somewhere to put it down.` — the final word in `clay-deep`.
+
+`clay-deep`, not `clay`. At `text-display` the word renders at 53.26px, so WCAG
+treats it as large text needing 3.0, and `clay` would clear that at 4.14:1. But
+globals.css §1 holds that clay is never a text colour anywhere on this site,
+and one hero is not a reason to make a standing rule conditional. Measured on
+the page: **#93472B on #FFFCF7, 6.46:1.**
+
+It is the only coloured word in the type on the home page. The other two
+clay-deep elements there — the `01/02/03` step numbers and "Go to the vent" —
+were already there.
+
+## 3. Verification
+
+### 3.1 Contrast, every route
+
+A CDP probe walked every rendered text element on 16 routes, resolved each
+one's composited background by walking ancestors, and computed the WCAG 2.x
+ratio from the painted colours.
+
+**371 text elements measured across 16 routes. One below AA:**
+
+```
+2.49:1  17px #9A958C on #EFEAE1  <button> "Release & Let Go"
+```
+
+That is the disabled release button on `/vent` with an empty textarea. It is
+`--color-disabled-text`, which globals.css documents as deliberately failing
+because a disabled control must read as unavailable, and which WCAG exempts. It
+is unchanged by this work and was 2.49:1 before it.
+
+### 3.2 Lighthouse
+
+Accessibility category, production build, headless Chrome, every route:
+
+| | |
+|---|---|
+| 100 | `/` `/about` `/voices` `/support` `/contact` `/crisis-resources` `/community-guidelines` `/privacy` `/vent` `/vent/released` `/login` `/register` `/account` `/auth/callback` `/admin/feedback` |
+| no score | `/nope-404` |
+
+**The 404 route cannot be Lighthouse-scored.** It returns
+`ERRORED_DOCUMENT_REQUEST` — Lighthouse refuses to audit any page served with a
+404 status. That is a tooling limitation and not a finding, but it does mean
+the "100 across every route" claim has a hole in it, so the hole was filled
+another way.
+
+### 3.3 axe-core, including the route Lighthouse would not take
+
+axe-core 4.10.2 injected over CDP, `wcag2a wcag2aa wcag21a wcag21aa`:
+
+**0 violations across all 16 routes, `/nope-404` included.** 23–27 rules passed
+per route. One `incomplete` on `/vent` — `color-contrast` on the same disabled
+button, which axe flags for human review rather than as a violation.
+
+### 3.4 Everything else
+
+`npm test` 80 passed, 14 files. `npm run typecheck` clean. `npm run lint`
+clean. Rendered and read at 1440 and 375.
+
+**One build note:** `next build` first failed with `PageNotFoundError` on five
+routes. It was a stale `.next` left by a dev server killed mid-write, not a
+code fault — `rm -rf .next` and it built clean. Worth knowing, because the
+error names application routes and reads like a broken import.
+
+## 4. What was not done
+
+- **No gradient, no new colour, no saturated accent, no shadow on a card.**
+  §8's list is intact.
+- **No palette change.** globals.css §1 is byte-identical.
+- **The crisis strip is not restyled.** Its surface, type and spacing are as
+  they were; what changed is the surface beneath it.
+- **`/vent` and `/vent/released` were not opened.**

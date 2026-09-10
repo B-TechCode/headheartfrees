@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { focusRing } from "@/components/ui/styles";
+import { SectionRule } from "@/components/ui/SectionRule";
 
 /**
  * The donation section on /about (PROJECT_BRIEF.md §7).
@@ -20,7 +21,9 @@ import { focusRing } from "@/components/ui/styles";
 export function DonationSection() {
   return (
     <section aria-labelledby="support-heading" className="mt-16 border-t border-rule pt-10">
-      <h2 id="support-heading" className="font-display text-h3 text-ink">
+      <SectionRule />
+
+      <h2 id="support-heading" className="mt-4 font-display text-h3 text-ink">
         Supporting this
       </h2>
 

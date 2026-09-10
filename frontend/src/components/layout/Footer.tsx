@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Logo } from "@/components/ui/Logo";
-import { focusRing } from "@/components/ui/styles";
+import { focusRing, secondaryAction } from "@/components/ui/styles";
 import { FOOTER_HELPLINES } from "@/lib/helplines";
 import { SOCIAL_LINKS, type SocialIconName } from "@/lib/social";
 import { SectionRule } from "@/components/ui/SectionRule";
@@ -146,12 +146,8 @@ export function Footer() {
             <Link
               href="/support"
               className={cn(
-                "inline-flex min-h-11 items-center rounded-sm",
-                "text-body-sm text-ink-soft",
-                "underline decoration-rule-strong underline-offset-4",
-                "transition-colors duration-150 ease-out",
-                "hover:text-(--color-text-accent) hover:decoration-clay",
-                focusRing,
+                "inline-flex min-h-11 items-center text-body-sm",
+                secondaryAction,
               )}
             >
               Support this space

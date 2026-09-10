@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Logo } from "@/components/ui/Logo";
-import { focusRing } from "@/components/ui/styles";
+import { focusRing, secondaryAction } from "@/components/ui/styles";
 import { SectionRule } from "@/components/ui/SectionRule";
 
 /**
@@ -76,11 +76,8 @@ export function Hero() {
             <Link
               href="/about"
               className={cn(
-                "inline-flex min-h-11 items-center rounded-sm text-body text-ink-soft",
-                "underline decoration-ink-faint underline-offset-4",
-                "transition-colors duration-150 ease-out",
-                "hover:text-(--color-text-accent) hover:decoration-clay",
-                focusRing,
+                "inline-flex min-h-11 items-center text-body",
+                secondaryAction,
               )}
             >
               Why this exists

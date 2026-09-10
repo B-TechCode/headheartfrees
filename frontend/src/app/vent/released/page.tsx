@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { FeedbackInvitation } from "@/components/sections/FeedbackInvitation";
 import { cn } from "@/lib/cn";
-import { focusRing } from "@/components/ui/styles";
+import { focusRing, secondaryAction } from "@/components/ui/styles";
 
 export const metadata: Metadata = {
   title: "Released",
@@ -65,11 +65,8 @@ export default function ReleasedPage() {
         <Link
           href="/"
           className={cn(
-            "inline-flex min-h-11 items-center rounded-sm text-body text-ink-soft",
-            "underline decoration-ink-faint underline-offset-4",
-            "transition-colors duration-150 ease-out",
-            "hover:text-(--color-text-accent) hover:decoration-clay",
-            focusRing,
+            "inline-flex min-h-11 items-center text-body",
+            secondaryAction,
           )}
         >
           Back to home

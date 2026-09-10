@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { focusRing } from "@/components/ui/styles";
+import { focusRing, secondaryAction } from "@/components/ui/styles";
 import { FeedbackForm } from "@/components/sections/FeedbackForm";
 
 /**
@@ -76,11 +76,8 @@ export function FeedbackInvitation() {
           type="button"
           onClick={() => setOpen(true)}
           className={cn(
-            "mt-4 inline-flex min-h-11 items-center rounded-sm text-body text-ink-soft",
-            "underline decoration-ink-faint underline-offset-4",
-            "transition-colors duration-150 ease-out",
-            "hover:text-(--color-text-accent) hover:decoration-clay",
-            focusRing,
+            "mt-4 inline-flex min-h-11 items-center text-body",
+            secondaryAction,
           )}
         >
           Leave a note

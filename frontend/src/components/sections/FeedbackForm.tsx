@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { RatingInput } from "@/components/ui/RatingInput";
 import { Textarea } from "@/components/ui/Textarea";
 import { cn } from "@/lib/cn";
-import { focusRing } from "@/components/ui/styles";
+import { secondaryAction } from "@/components/ui/styles";
 import { describeAuthError } from "@/lib/auth/errors";
 import { fieldErrorsOf } from "@/lib/auth/errors";
 import { useSession } from "@/lib/auth/SessionProvider";
@@ -222,11 +222,8 @@ export function FeedbackForm({
           type="button"
           onClick={onCancel}
           className={cn(
-            "inline-flex min-h-11 items-center rounded-sm text-body text-ink-soft",
-            "underline decoration-ink-faint underline-offset-4",
-            "transition-colors duration-150 ease-out",
-            "hover:text-(--color-text-accent) hover:decoration-clay",
-            focusRing,
+            "inline-flex min-h-11 items-center text-body",
+            secondaryAction,
           )}
         >
           Never mind

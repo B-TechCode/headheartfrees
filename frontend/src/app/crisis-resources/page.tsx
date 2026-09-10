@@ -5,7 +5,7 @@ import { HelplineList } from "@/components/sections/HelplineList";
 import { Callout } from "@/components/ui/Callout";
 import { INDIA_HELPLINES, INTERNATIONAL_HELPLINES } from "@/lib/helplines";
 import { cn } from "@/lib/cn";
-import { focusRing } from "@/components/ui/styles";
+import { focusRing, secondaryAction } from "@/components/ui/styles";
 import { SectionRule } from "@/components/ui/SectionRule";
 
 export const metadata: Metadata = {
@@ -142,9 +142,7 @@ export default function CrisisResourcesPage() {
         <Link
           href="/vent"
           className={cn(
-            "rounded-sm underline decoration-ink-faint underline-offset-4",
-            "hover:text-(--color-text-accent) hover:decoration-clay",
-            focusRing,
+            secondaryAction,
           )}
         >
           Go back to the vent

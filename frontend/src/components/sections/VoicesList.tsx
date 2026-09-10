@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Callout } from "@/components/ui/Callout";
 import { cn } from "@/lib/cn";
-import { focusRing } from "@/components/ui/styles";
+import { focusRing, secondaryAction } from "@/components/ui/styles";
 import { describeAuthError } from "@/lib/auth/errors";
 import { fetchPublishedFeedback, type PublishedFeedback } from "@/lib/feedback";
 
@@ -77,10 +77,8 @@ export function VoicesList() {
           type="button"
           onClick={() => void load(0)}
           className={cn(
-            "mt-3 inline-flex min-h-11 items-center rounded-sm text-body",
-            "underline decoration-ink-faint underline-offset-4",
-            "hover:decoration-clay",
-            focusRing,
+            "mt-3 inline-flex min-h-11 items-center text-body",
+            secondaryAction,
           )}
         >
           Try again

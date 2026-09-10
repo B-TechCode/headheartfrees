@@ -4918,3 +4918,314 @@ error names application routes and reads like a broken import.
 - **The crisis strip is not restyled.** Its surface, type and spacing are as
   they were; what changed is the surface beneath it.
 - **`/vent` and `/vent/released` were not opened.**
+---
+
+# Post-phase-9 — a security header broke every client component, and /vent was where it showed
+
+**Reported as:** typing in the vent composer does not update state. The text
+appears in the box, the counter stays at `0 / 2000`, and "Release & Let Go"
+never enables.
+
+**Actual cause:** the phase 9 Content-Security-Policy. It applies to
+`next dev`, it does not permit `eval`, and React Fast Refresh needs `eval`.
+The client bundle stopped booting three commits ago and **nothing on the site
+has hydrated in development since**. `/vent` is simply the page where a dead
+client bundle is impossible to mistake for a working page.
+
+Production was never affected, and nothing shipped was ever wrong.
+
+## 1. The instruction was a misdiagnosis, and it pointed at a clean path
+
+The task came with a hypothesis attached, and it is worth writing down because
+it was wrong in an instructive way:
+
+> This was working before the design changes. Check whether anything in that
+> work touched VentComposer or its parent — a section wrapper added around it,
+> a component boundary changed, a "use client" boundary moved. Wrapping a
+> client component's parent in a new server component is a plausible cause.
+
+It *is* a plausible cause. It is the right instinct for the symptom, and the
+timing genuinely did point at the design work. It was also a path with nothing
+wrong in it, and following it would have meant reading `VentComposer.tsx`,
+`Textarea.tsx` and `app/vent/page.tsx` looking for a defect none of them had.
+
+The author who filed it was reasoning from the last thing that changed. That is
+usually right and here it was not, because **the design commits were the last
+thing that changed but not the last thing that broke**. The break was three
+commits older and had been invisible the whole time.
+
+The lesson is not "ignore the reporter's hypothesis". It is that a hypothesis
+is a place to look first, not a conclusion to confirm — and that the cheapest
+way to settle it is to check what the suspected commits actually touched before
+reading any of the files they didn't.
+
+## 2. Ruling out the design work took one command
+
+```
+$ git log --name-only --oneline -3
+5d2990c feat(design): sink the footer, and give the type some rhythm
+  PHASE_LOG.md, app/about, app/contact, app/crisis-resources, app/support,
+  layout/Footer.tsx, sections/ClosingAction.tsx, sections/DonationSection.tsx,
+  sections/Hero.tsx, sections/HowItWorks.tsx, sections/PageHeader.tsx,
+  sections/Promises.tsx, ui/Prose.tsx, ui/SectionRule.tsx
+c352603 feat(footer): a social row, ...
+  layout/Footer.social.test.tsx, layout/Footer.tsx, lib/social.ts
+4deedb6 feat(contact): supply the real address, ...
+  app/contact/page.test.tsx, app/contact/page.tsx, lib/contact.ts, lib/support.ts
+```
+
+No `VentComposer.tsx`. No `ui/Textarea.tsx`. No `app/vent/page.tsx`. No
+`app/layout.tsx`. No wrapper was added around the composer, no component
+boundary moved, and no `"use client"` directive was touched in any of the
+three. The named hypothesis was dead in one command, before a single component
+file was opened.
+
+That the design phase did not go near `/vent` is not an inference. **It is
+written at the bottom of this very log**, as the last line of the previous
+entry:
+
+> - **`/vent` and `/vent/released` were not opened.**
+
+Which is also the answer to "how did this survive three commits". The design
+work was careful and scoped, said so, and stayed inside its scope. It reviewed
+its pages in a real browser at 1440 and 375 — and every one of those pages is
+static server-rendered content that looks *identical* whether React hydrates or
+not. The one page whose correctness depends on hydration is the one page the
+phase deliberately did not open.
+
+## 3. `hasReactPropsKey: []` — what actually identified it
+
+Reproduced in real Chrome over CDP against `next dev` before changing anything.
+The check that settled it was not the counter or the button. It was asking the
+textarea whether React knew about it at all:
+
+```js
+const ta = document.querySelector('textarea');
+Object.keys(ta).filter(k => k.startsWith('__react'))
+```
+
+React attaches `__reactFiber$…`, `__reactProps$…` and `__reactEvents$…` to
+every host node it mounts. Result on the broken dev server:
+
+```json
+{
+  "hydrationMarkers": {
+    "textareaFound": true,
+    "hasReactPropsKey": [],
+    "valueAttrPresent": false
+  },
+  "afterTyping": {
+    "domValue": "hello there",
+    "counterText": "0 / 2000",
+    "buttonDisabled": true
+  },
+  "consoleAndErrors": [
+    { "kind": "exception",
+      "text": "EvalError: Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self' 'unsafe-inline' ... at .../@next/react-refresh-utils/dist/runtime.js at __webpack_require__ (webpack.js) at __webpack_exec__ (main-app.js)" }
+  ]
+}
+```
+
+An empty `hasReactPropsKey` is not a component with a broken handler. It is a
+component that **was never mounted**. That single field converts the question
+from "which line of VentComposer is wrong" — a question with no answer — into
+"why did React not run", which has exactly one candidate sitting in the console
+next to it.
+
+This distinction is worth keeping, because the two states are visually
+identical and behave identically to a person typing:
+
+| | React mounted, handler broken | React never mounted |
+|---|---|---|
+| Text appears in box | yes | yes |
+| Counter frozen at `0 / 2000` | yes | yes |
+| Button never enables | yes | yes |
+| `__reactFiber$` on the node | **present** | **absent** |
+
+Without the last row there is nothing to tell them apart from the outside, and
+every instinct points at the component — which is precisely where the reported
+hypothesis pointed, and precisely where nothing was wrong.
+
+The mechanism, once named: `eval` is called by the Fast Refresh runtime *during
+the execution of a webpack module factory* in `main-app.js`. It is not a
+deferred callback that fails in isolation. It throws synchronously inside the
+chunk's own evaluation, so the chunk never finishes, so the app never boots,
+so **no client component anywhere on the site hydrates**. The navbar, the
+account menu, every form — all inert. They just have nothing to display that
+would reveal it.
+
+## 4. Why `/vent` and only `/vent`
+
+Server HTML renders normally; CSP blocks the script, not the response. So every
+page looks right. The site degrades to what it would be with JavaScript
+disabled, and almost all of this site is honest static content that survives
+that.
+
+`/vent` does not. A textarea with no React `value` controlling it keeps whatever
+is typed into it, because that is what a plain HTML textarea does. So the box
+accepts writing and appears to work, while the state the counter and the button
+read from stays `""` forever. Someone writes into it and the page refuses to
+acknowledge a word of it.
+
+Rule 2.1 says the text in that box never leaves the browser. It never did — the
+bug was strictly worse than a leak in one specific way: **it made the product
+look like it was ignoring people.** That is the failure mode this site exists to
+not have.
+
+## 5. Production was never broken
+
+Verified rather than assumed, on the same commit, same repro:
+
+```
+$ next build && next start
+{ "hasReactPropsKey": ["__reactFiber$…","__reactProps$…","__reactEvents$…"],
+  "afterTyping": { "domValue": "hello there",
+                   "counterText": "11 / 2000",
+                   "buttonDisabled": false },
+  "consoleAndErrors": [] }
+```
+
+Fast Refresh is development-only, so the `eval` that trips the policy is not in
+a production bundle. Nothing that reached a user was ever affected. The blast
+radius was the development environment, for three commits.
+
+## 6. The fix
+
+`next.config.ts` now builds the policy through an exported
+`contentSecurityPolicy(mode, apiOrigin)`. Development gets three additive
+relaxations and production gets none:
+
+| directive | production | development |
+|---|---|---|
+| `script-src` | `'self' 'unsafe-inline'` | `+ 'unsafe-eval'` — Fast Refresh |
+| `style-src` | `'self'` | `+ 'unsafe-inline'` — dev injects stylesheets |
+| `connect-src` | `'self' <api>` | `+ ws: wss:` — HMR socket |
+
+Everything the policy is actually for is unchanged in both:
+`frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'none'`,
+`form-action 'self'`, and the API origin named explicitly. Developing against
+it stays representative.
+
+**The production string is byte-for-byte what it was**, checked two ways rather
+than by reading the diff — out of the build manifest, and off the wire:
+
+```
+$ python -c "...routes-manifest.json..."
+PROD CSP: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' http://localhost:8080; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'
+IDENTICAL TO PRE-FIX: True
+
+$ curl -sD - localhost:3333/vent | grep -i ^content-security
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; ...
+```
+
+`'unsafe-eval'` in a shipped policy would hand an injected string the ability to
+become code, which is most of what the rest of that header is written to
+prevent. The dev/prod split is the whole point of the change and the thing most
+likely to be undone by someone simplifying it later, so it is pinned by test
+rather than by comment.
+
+## 7. Why the existing tests passed, and what was added
+
+`VentComposer.session.test.tsx` types into this exact textarea and asserts the
+release button is enabled. It passed throughout. It was never wrong:
+
+- it mounts `VentComposer` directly through Testing Library — no HTTP, no
+  document served with headers, no hydration step;
+- **jsdom does not implement CSP at all**;
+- `next.config.ts` was not imported by any test in the suite.
+
+The defect lived entirely in the delivery layer. **No component test could have
+caught it, however thorough** — the component was correct, and a test that
+mounts the component tests the one thing that was working. This is the useful
+generalisation: a suite made only of component tests cannot see any fault in how
+the components are delivered, and will report full health while the site is
+down.
+
+Two tests added, doing different jobs:
+
+**`frontend/next.config.test.ts`** — the one that covers the actual defect. It
+pins the production policy as one exact string, so a development relaxation
+cannot be appended without failing, and asserts development permits the `eval`
+Fast Refresh needs. Verified to fail in both directions rather than assumed to:
+
+```
+# with the pre-fix single policy restored
+× in development > permits the eval that React Fast Refresh needs
+× in development > permits the injected stylesheets and the HMR socket
+× relaxes nothing outside development
+Tests  3 failed | 4 passed
+
+# with 'unsafe-eval' leaked into production
+× in production > is exactly the policy that was verified in a browser
+× in production > never permits eval
+× relaxes nothing outside development
+Tests  3 failed | 4 passed
+```
+
+It sits beside `next.config.ts` rather than under `src/`, because that is where
+someone editing the CSP will look. That is what the second `include` entry in
+`vitest.config.mts` is for.
+
+**`VentComposer.composing.test.tsx`** — the composer's own contract, which was
+only ever asserted incidentally. The counter was asserted **nowhere** in the
+suite; the session test types in order to release and checks the button on the
+way to clicking it. Now explicit: typing moves the counter and enables the
+button, deleting takes both back, whitespace alone does not offer release, and
+a prompt starter counts. Its header says plainly that it could not have caught
+the outage, so nobody reads it later as coverage it does not provide.
+
+## 8. Verification
+
+- Real Chrome over CDP, `next dev`, `/vent`: fibers present, `11 / 2000`,
+  button enabled, no CSP errors.
+- Same, `next build` + `next start` from a clean `.next`: identical, zero
+  console output.
+- `/`, `/voices`, `/login`, `/crisis-resources` in dev: no CSP violations.
+  (`/voices` logs a CORS/network error because the backend is not running
+  locally — unrelated, and present before this change.)
+- `npm test` 92 passed, 16 files. `npm run typecheck` clean. `npm run lint`
+  clean.
+
+One note on method, since section 6 of the phase 1 entry set the precedent: an
+earlier `next start` held its port after being stopped, and the first "verified
+in production" run hit that stale pre-fix server. The number it returned was
+right for the wrong reason. It was caught, the port was cleared, and the run
+above is against a freshly built and freshly served bundle. A verification that
+silently tests the previous build is worth less than no verification, because it
+is believed.
+
+## 9. What this says
+
+**A header is application behaviour.** `headers()` was reviewed as a security
+artefact and reasoned about entirely in terms of what an attacker could do with
+it. What it could do to `next dev` was not considered, and it turned the
+development environment off. Config that varies by environment needs to be
+tested in each environment it varies in — which, before this, meant a test file
+the suite had no route to at all.
+
+**"It worked before X" locates the last change, not the first fault.** The
+report was filed against the design commits because those were what moved. They
+were three commits too recent. The correction was cheap — one `git log
+--name-only` against the named suspects — and it should come *before* reading
+the files a hypothesis points at, not after failing to find anything in them.
+
+**Ask whether the component ran before asking what it did wrong.** A component
+that never mounted and a component with a dead handler present identically.
+`Object.keys(node).filter(k => k.startsWith('__react'))` separates them in one
+line and costs nothing. It should be the first thing checked whenever a React
+UI is inert but the DOM looks correct — the alternative is auditing correct code
+indefinitely.
+
+**A green suite described a site that did not run.** Ninety-two component tests
+passed against a build where no component mounted. That is not a gap in any one
+test; it is the shape of a suite with no layer beneath the components. This
+entry adds one file at that layer. It is thin, and it is the only thing standing
+between the next CSP edit and another silent three-commit outage.
+
+**The failure landed on `/vent`.** Everything else degraded to static content
+and looked fine. The product degraded to a box that takes someone's words and
+does not react to them, and it did so while every promise on the page about
+those words remained true. `/vent` should be opened in a real browser as part of
+verifying *any* change to headers, layout, providers or the root of the tree —
+not because it is fragile, but because it is the only page on this site that
+tells the truth about whether the client is alive.

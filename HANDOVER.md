@@ -168,6 +168,54 @@ misrepresentation to the person giving, and the page is written so there is no
 half-true sentence to extend. If the status is later established, the copy can
 say so — with the registration number.
 
+### 2.9 Social links — and these are the developer's own accounts
+
+**This is the one placeholder a visitor cannot see, and the only one that is
+live.** The footer of every page currently links to four accounts belonging to
+the person who built this site.
+
+All four are in one file:
+
+```
+frontend/src/lib/social.ts  lines 47-60
+export const SOCIAL_LINKS = [
+  LinkedIn   line 50   https://www.linkedin.com/in/aakashprasadchaurasiya/
+  Facebook   line 55   https://www.facebook.com/aakash.chaurasiya.232668/
+  GitHub     line 58   https://github.com/B-TechCode
+  Portfolio  line 59   https://www.aakashchaurasiya.com.np/
+]
+```
+
+And a flag beside them:
+
+```
+frontend/src/lib/social.ts  line 71
+export const SOCIAL_LINKS_ARE_PLACEHOLDER = true;
+```
+
+Replace the four URLs with the project's own accounts and set the flag to
+`false`. If the project has no such accounts, **delete the entries** — an empty
+`SOCIAL_LINKS` renders no row and breaks nothing.
+
+**Why this one needs deliberate attention.** The other two placeholders in this
+section protect themselves. `CONTACT_EMAIL` and `SUPPORT_UPI_ID` are visibly
+fake strings, and while their flags are `true` the pages carrying them show a
+notice telling the visitor the thing is not connected yet. Forget either one
+and the site says so, out loud, to everybody.
+
+These are real, working links, and **nothing on the rendered page marks them as
+temporary.** The flag above changes nothing on screen — deliberately, because
+a footer captioned "these profiles belong to the developer" would be strange to
+a visitor and would not stop anyone clicking. So this file's header comment,
+this section, and §4 are the entire safety net.
+
+The failure mode is therefore quiet and open-ended: a site handed over with
+this file untouched sends its visitors to a stranger's LinkedIn, from the
+footer of every page, for as long as it stays up. Nobody will report it,
+because to a visitor it looks like it is working.
+
+**Check `frontend/src/lib/social.ts` at handover even if nothing prompts you.**
+
 ---
 
 ## 3. What must happen before a public launch
@@ -318,6 +366,7 @@ At handover the owner should assume the developer retains nothing, and verify it
 | GitHub repository access | Transfer ownership or remove the developer as a collaborator. |
 | The contact inbox (`headheartfrees@gmail.com`) | **Transfers, not revoked.** It is the project's account, not a person's — hand over the password and recovery details, then change the password and remove any other recovery address or device still attached. See §2.5. |
 | Any deployment or database access | Rotate credentials after handover, regardless of trust. |
+| Developer's social and portfolio links in the site footer | **Still live on every page.** These are the developer's personal accounts, not the project's, and unlike the other placeholders nothing on screen says so. Replace or delete the four URLs in `frontend/src/lib/social.ts` — see §2.9. This is the item most likely to be missed, because nothing breaks if it is. |
 
 Rotating credentials at handover is normal practice and is not a statement about
 anyone. It is simply how you make the boundary real.

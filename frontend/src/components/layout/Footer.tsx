@@ -3,6 +3,7 @@ import { cn } from "@/lib/cn";
 import { Logo } from "@/components/ui/Logo";
 import { focusRing } from "@/components/ui/styles";
 import { FOOTER_HELPLINES } from "@/lib/helplines";
+import { SOCIAL_LINKS, type SocialIconName } from "@/lib/social";
 
 /**
  * PROJECT_BRIEF.md §7: the footer has no Navigate column. Home, Vent and About
@@ -98,20 +99,47 @@ export function Footer() {
             &copy; {new Date().getFullYear()} HeadHeartFreeS
           </p>
 
-          {/* Quiet by design — a soft line, not a banner and not a modal. */}
-          <Link
-            href="/support"
+          {/*
+            The second track carries both the support line and the social row.
+
+            The brief for the icons was "copyright on one side, icons on the
+            other", and that is what this is — but they are not pushed to the
+            right edge of the track. This grid's whole reason for existing is
+            the comment above: `justify-between` put a measured 507px hole in
+            the middle of the footer at 1440, and the fix was to stop treating
+            the far edge as a place to anchor things. Sending the icons there
+            would rebuild the hole one row lower, with the support line and the
+            icons at opposite ends of a 544px track.
+
+            So the two sit together at the start of the track, opposite the
+            copyright. They stack below `lg` rather than at `md`: at `md` this
+            cell is 336px and the line plus four 44px targets is ~338px, which
+            is a wrap waiting to happen at exactly the width where the grid
+            first goes two-up.
+          */}
+          <div
             className={cn(
-              "inline-flex min-h-11 items-center justify-self-start rounded-sm",
-              "text-body-sm text-ink-soft",
-              "underline decoration-rule-strong underline-offset-4",
-              "transition-colors duration-150 ease-out",
-              "hover:text-(--color-text-accent) hover:decoration-clay",
-              focusRing,
+              "flex flex-col items-start gap-3",
+              "lg:flex-row lg:items-center lg:gap-x-8",
             )}
           >
-            Support this space
-          </Link>
+            {/* Quiet by design — a soft line, not a banner and not a modal. */}
+            <Link
+              href="/support"
+              className={cn(
+                "inline-flex min-h-11 items-center rounded-sm",
+                "text-body-sm text-ink-soft",
+                "underline decoration-rule-strong underline-offset-4",
+                "transition-colors duration-150 ease-out",
+                "hover:text-(--color-text-accent) hover:decoration-clay",
+                focusRing,
+              )}
+            >
+              Support this space
+            </Link>
+
+            <SocialRow />
+          </div>
         </div>
       </div>
     </footer>
@@ -261,5 +289,138 @@ function FooterColumn({
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * The social row.
+ *
+ * ===========================================================================
+ * Where the links come from
+ * ===========================================================================
+ *
+ * `lib/social.ts`, and nothing here is hardcoded. Read that file's header
+ * before touching this: the four URLs are the **developer's personal
+ * accounts** and are temporary. Unlike the contact address and the payment ID,
+ * they are live and working, so nothing on this page marks them as
+ * placeholder — this component renders them exactly as it would render the
+ * project's own.
+ *
+ * ===========================================================================
+ * Why these are not brand logos
+ * ===========================================================================
+ *
+ * The recognisable LinkedIn, Facebook and GitHub marks are trademarks with
+ * usage terms attached — permitted uses, minimum clear space, prohibited
+ * recolouring. This site draws its own glyphs instead, in the same hand as
+ * every other icon here: 24-unit box, 1.75 stroke, round caps, `currentColor`.
+ * They are metaphors rather than marks — a briefcase for the professional
+ * profile, two figures for the social one, a branch for the code host, a globe
+ * for the personal site.
+ *
+ * **The cost is real and worth stating: a briefcase is not as instantly
+ * readable as the LinkedIn glyph.** That is why the accessible name is the
+ * platform's own name and why `title` puts the same word in a hover tooltip.
+ * The icon narrows the guess; the name settles it.
+ *
+ * ===========================================================================
+ * The anchor
+ * ===========================================================================
+ *
+ * - `aria-label` carries the real name. A screen reader announces "LinkedIn,
+ *   link", not "link" — the SVG is `aria-hidden`, so without the label these
+ *   would be four unnamed links in a row, which is close to the worst
+ *   available outcome for a keyboard or screen reader user.
+ * - `h-11 w-11` is the 44px target from PROJECT_BRIEF.md §8, around a 20px
+ *   glyph. The `-ml-3` cancels the first target's own left padding so the
+ *   glyphs line up with the text above them rather than sitting indented by
+ *   12px; at `lg` the row moves inline and the offset is dropped.
+ * - `target="_blank"` with `rel="noopener noreferrer"`. These leave the site,
+ *   and `noopener` is what stops the opened page reaching back through
+ *   `window.opener`.
+ */
+function SocialRow() {
+  return (
+    <ul className="-ml-3 flex items-center lg:ml-0">
+      {SOCIAL_LINKS.map((link) => (
+        <li key={link.label}>
+          <a
+            href={link.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={link.label}
+            title={link.label}
+            className={cn(
+              "inline-flex h-11 w-11 items-center justify-center rounded-sm",
+              "text-ink-soft",
+              "transition-colors duration-150 ease-out",
+              "hover:text-(--color-text-accent)",
+              focusRing,
+            )}
+          >
+            <SocialIcon name={link.icon} />
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * The four glyphs, drawn to the house spec: `0 0 24 24`, `fill="none"`, 1.75
+ * stroke in `currentColor`, round caps and joins. The same numbers the navbar
+ * menu button and the account chevron use, so the footer does not introduce a
+ * second icon weight.
+ *
+ * Always `aria-hidden`. The name lives on the anchor.
+ */
+function SocialIcon({ name }: { name: SocialIconName }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      className="h-5 w-5"
+    >
+      {name === "briefcase" ? (
+        <>
+          <rect x="3" y="7.5" width="18" height="12" rx="2" />
+          <path d="M9 7.5V6a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 6v1.5" />
+          <path d="M3 13h18" />
+        </>
+      ) : null}
+
+      {name === "people" ? (
+        <>
+          <circle cx="9.25" cy="8.25" r="3.25" />
+          <path d="M3.5 19.5a5.75 5.75 0 0 1 11.5 0" />
+          <path d="M16.25 5.4a3.25 3.25 0 0 1 0 5.7" />
+          <path d="M17.5 14.4a5.75 5.75 0 0 1 3 5.1" />
+        </>
+      ) : null}
+
+      {name === "branch" ? (
+        <>
+          <circle cx="7" cy="5.75" r="2.5" />
+          <circle cx="7" cy="18.25" r="2.5" />
+          <circle cx="17" cy="5.75" r="2.5" />
+          <path d="M7 8.25v7.5" />
+          <path d="M17 8.25v1.5a4 4 0 0 1-4 4H7" />
+        </>
+      ) : null}
+
+      {name === "globe" ? (
+        <>
+          <circle cx="12" cy="12" r="8.25" />
+          <path d="M3.75 12h16.5" />
+          <path d="M12 3.75c2.1 2.35 3.15 5.1 3.15 8.25S14.1 17.9 12 20.25c-2.1-2.35-3.15-5.1-3.15-8.25S9.9 6.1 12 3.75Z" />
+        </>
+      ) : null}
+    </svg>
   );
 }

@@ -4594,3 +4594,143 @@ The document already had the idiom — §3.5 is a struck-through heading recordi
 closed phase 9 blockers — so this follows it. §4's revocation table gains a row
 saying the inbox transfers rather than being revoked, which is the one thing
 about it that differs from every other credential in that table.
+
+
+---
+
+# Post-phase-9 — social links in the footer
+
+Date: 2026-09-10. Not a phase. A four-icon row added to the footer's bottom
+bar, and a third owner-supplied placeholder created in the process.
+
+## 1. Read this part first
+
+**The four links are the developer's personal accounts, they are live, and
+nothing on the rendered page says they are temporary.**
+
+That last clause is the whole entry. This project already had two placeholders
+and both were built to fail loudly:
+
+| | `CONTACT_EMAIL` | `SUPPORT_UPI_ID` | `SOCIAL_LINKS` |
+|---|---|---|---|
+| Value while unconfigured | obviously fake | obviously fake | **real and working** |
+| Page shows a notice | yes | yes | **no** |
+| Visitor can tell | yes | yes | **no** |
+| Failure if forgotten | nobody can write in | nobody can give | **visitors are sent to a stranger's profiles, indefinitely** |
+
+The notice is missing on purpose rather than by oversight. A footer captioned
+"these profiles belong to the developer" would read as noise to a visitor and
+would not make anyone click less; there is no honest visitor-facing wording for
+"this link works, but it is the wrong person's". So the guard is entirely in
+places a visitor never sees — the header of `frontend/src/lib/social.ts`,
+HANDOVER §2.9, and a row in HANDOVER §4's revocation table.
+
+The consequence is worth naming plainly: **this is the placeholder most likely
+to survive handover**, because it is the only one whose survival breaks
+nothing. The other two stop the site doing something it advertises. This one
+just quietly keeps working, for the wrong person, on every page.
+
+`SOCIAL_LINKS_ARE_PLACEHOLDER` exists as a single thing to grep for. It is
+wired to no behaviour, and the file says so rather than implying it guards
+something.
+
+## 2. What was built
+
+`frontend/src/lib/social.ts` — the four URLs, the `SocialIconName` union, and
+the flag. One file, so the handover edit is one file.
+
+`Footer.tsx` — `SocialRow` and `SocialIcon`, plus a restructured bottom bar.
+
+**No icon library was added.** Four glyphs did not justify a dependency, and
+they are hand-drawn to the spec the rest of the site already uses: `0 0 24 24`,
+`fill="none"`, 1.75 stroke, round caps and joins, `currentColor`, `h-5 w-5` —
+the same numbers as the navbar menu button and the account chevron, so the
+footer introduces no second icon weight.
+
+**No brand logos.** The LinkedIn, Facebook and GitHub marks are trademarks with
+usage terms attached. The glyphs here are metaphors instead: a briefcase, two
+figures, a git branch, a globe.
+
+**The cost of that, stated because it is a real one:** a briefcase is not as
+instantly readable as the LinkedIn mark. Recognition is carried by the
+accessible name and by `title`, which puts the same word in a hover tooltip.
+The icon narrows the guess and the name settles it — but a sighted mouse-free
+visitor scanning the footer will not identify these as fast as brand marks, and
+that is the trade the trademark constraint buys.
+
+Colour is `text-ink-soft` with `hover:text-(--color-text-accent)`, matching the
+support line beside it. No hex, no rgb, nothing outside the token set; the SVGs
+inherit through `currentColor`.
+
+## 3. Why the icons are not at the right edge
+
+The brief was "copyright on one side, icons on the other". They are opposite
+the copyright — but at the **start** of the second track, not at the far right,
+and they share that track with "Support this space".
+
+The footer's own comment explains why. This bottom bar used to be
+`justify-between`, which put a measured 507px hole in the middle of the footer
+at 1440. The fix was a fixed-measure two-track grid and, more to the point,
+abandoning the far edge as somewhere to anchor things. Sending the icons to the
+right edge of a 544px track would have rebuilt exactly that hole one row lower,
+with the support line and the icons at opposite ends of it.
+
+So the support line and the icon row sit together, 32px apart, opposite the
+copyright. This is a deviation from the letter of the brief and it is
+deliberate.
+
+## 4. Verified in a real browser at five widths
+
+Not reasoned from the classes. Chrome over CDP against `next dev`, five
+viewports, geometry read off the live DOM with `getBoundingClientRect`.
+
+| Width | Layout | Icon row | Right edge | Overflow |
+|---|---|---|---|---|
+| 320 | stacked | y=3961, below the support line at y=3905 | 180 of 320 | none |
+| 375 | stacked | y=3854, below the support line at y=3798 | 180 of 375 | none |
+| 768 | 2-col grid, cell stacks | y=2677, below the support line at y=2621 | 572 of 768 | none |
+| 1440 | inline | y=2845, same row as the support line | 1057 of 1440 | none |
+| 1920 | inline | y=2845, same row as the support line | 1297 of 1920 | none |
+
+- **All four targets measured exactly 44x44 at every width.**
+- `document.scrollWidth === window.innerWidth` at all five. No horizontal
+  scroll anywhere.
+- Every anchor carried `target="_blank"`, `rel="noopener noreferrer"`, an
+  `aria-label` naming the platform, and an `aria-hidden="true"` SVG.
+
+**The stack point is `lg`, not `md`.** At `md` the second grid cell is 336px
+and the support line plus four 44px targets measures ~338px — a wrap at exactly
+the width where the grid first goes two-up. Stacking at `lg` avoids relying on
+a 2px margin.
+
+On mobile the `-ml-3` cancels the first target's own 12px of padding, so the
+glyphs align with the copyright text above them instead of sitting indented.
+It is dropped at `lg`, where the row goes inline and the offset would eat into
+the gap.
+
+No dark theme exists in this project, so the tokens have one rendering path and
+there was no second palette to check.
+
+## 5. Tests
+
+`Footer.social.test.tsx`, two cases, 80 frontend tests total (was 78).
+
+jsdom has no layout, so the geometry above is not and cannot be a test — it was
+measured in a browser and is recorded here instead. What the test holds is the
+part a reviewer cannot see on the rendered page: the accessible names, the
+`rel`/`target` pair, the `aria-hidden` glyph, and that the row renders from
+`lib/social.ts` rather than from URLs pasted into the JSX. That last one
+matters for handover specifically — a hardcoded URL would survive editing the
+file that HANDOVER §2.9 tells the owner to edit.
+
+`npm run typecheck` and `npm run lint` clean.
+
+## 6. Placeholder count
+
+Two open, one closed:
+
+| | State |
+|---|---|
+| `CONTACT_EMAIL` | closed earlier today |
+| `SUPPORT_UPI_ID` | open — owner's decision, HANDOVER §2.7 and §2.8 |
+| `SOCIAL_LINKS` | **open, live, and invisible to visitors** — HANDOVER §2.9 |

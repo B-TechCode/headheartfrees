@@ -3,7 +3,7 @@
 Everything the owner of this project needs to run it, and everything that has to
 change hands. Written to be read by someone who did not build it.
 
-Last updated: 2026-09-07. Phases 1–6 complete; see `PHASE_LOG.md` for the full
+Last updated: 2026-09-10. Phases 1–9 complete; see `PHASE_LOG.md` for the full
 build record and `PROJECT_BRIEF.md` for the design decisions behind it.
 
 ---
@@ -61,18 +61,46 @@ forge an admin session.
 A PostgreSQL 16 instance, and a user and password for it. Not the development
 defaults.
 
-### 2.5 A contact email address
+### 2.5 ~~A contact email address~~ — SUPPLIED 2026-09-10
 
-Currently a placeholder. It is one line:
+Nothing to do here. The address is `headheartfrees@gmail.com`, it is set in
+`frontend/src/lib/contact.ts`, and the "not live yet" notice on `/contact` is
+gone because `CONTACT_EMAIL_IS_PLACEHOLDER` is now `false`.
 
-```
-frontend/src/lib/contact.ts  line 20
-export const CONTACT_EMAIL = "REPLACE-ME@example.invalid";
-```
+**The account belongs to the project, not to a person.** It is not anyone's
+personal mailbox, so it changes hands with the site: at handover the password
+and any recovery details go to the new owner, and whoever held it before loses
+access. Nobody has to rewrite the site, reprint anything, or ask visitors to
+use a different address.
 
-And a flag on line 24 to set to `false` once the real address is in. Until then
-the Contact page shows a visible notice that the address is not live, so nobody
-emails a void and waits.
+The kept-numbering here is deliberate: sections 2.7 and 2.8 are referred to by
+`frontend/src/lib/support.ts` and by `PHASE_LOG.md`, so this heading stays
+rather than renumbering the rest.
+
+### 2.5.1 What comes with the inbox
+
+Worth reading before you take the password, and worth passing on to whoever
+takes it after you.
+
+This is a public address on a mental health site, so some of what arrives will
+be hard to read. Most of it will be ordinary — a broken link, a wrong number, a
+question about privacy. Some of it will not be. Sooner or later somebody will
+write to this inbox in real distress, or write something that stays with you
+after you have closed the tab. That is not a sign anything has gone wrong with
+the site; it is what having a public address on a site like this one means.
+
+Two things make it survivable. The first is knowing what the inbox can and
+cannot do — `/contact` says plainly that it is not a crisis line and is not
+watched overnight, and that page is the honest answer to a message you cannot
+answer in time. Do not let it drift into promising more. The second is that the
+helplines on `/crisis-resources` are open to you as well. They are not only for
+the people writing in. If something you read here sits with you, that is an
+ordinary response to reading it, and those numbers are yours to call.
+
+The moderation queue carries the same note for the person reviewing feedback
+(`ModeratorSupport` in `frontend/src/components/sections/ModerationQueue.tsx`),
+for the same reason. If the inbox and the queue end up with different people,
+both of them should have read this.
 
 ### 2.6 A decision on who moderates feedback
 
@@ -288,6 +316,7 @@ At handover the owner should assume the developer retains nothing, and verify it
 | Developer's Google OAuth client | Developer deletes it. It only worked on localhost. |
 | Developer's local `.env` | Never committed; developer deletes it. |
 | GitHub repository access | Transfer ownership or remove the developer as a collaborator. |
+| The contact inbox (`headheartfrees@gmail.com`) | **Transfers, not revoked.** It is the project's account, not a person's — hand over the password and recovery details, then change the password and remove any other recovery address or device still attached. See §2.5. |
 | Any deployment or database access | Rotate credentials after handover, regardless of trust. |
 
 Rotating credentials at handover is normal practice and is not a statement about

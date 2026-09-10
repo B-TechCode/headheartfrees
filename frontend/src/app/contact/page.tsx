@@ -23,9 +23,10 @@ export const metadata: Metadata = {
  * submission until Phase 7, and a form that silently drops what someone typed
  * would be worse than no form on this product in particular.
  *
- * The address lives in lib/contact.ts as a single clearly-marked placeholder.
- * While CONTACT_EMAIL_IS_PLACEHOLDER is true the page says so out loud rather
- * than presenting a dead address as a working one.
+ * The address lives in lib/contact.ts, and is now a real inbox belonging to
+ * the project. The CONTACT_EMAIL_IS_PLACEHOLDER branch below is kept: if the
+ * address ever goes dead again the page says so out loud rather than
+ * presenting a dead address as a working one.
  *
  * The most important thing on this page is the line about what this inbox is
  * not. Someone in distress who emails and waits is worse off than someone who

@@ -4494,3 +4494,103 @@ checks, and both passed locally for environment-specific reasons — a populated
 **Status change:** run #2 — wiring fixed and green, frontend guard fixed here.
 The corrected frontend job has not itself run on CI yet. Phase 9 §11 item 5 moves
 to "ran twice, two guard defects fixed, re-run pending".
+
+
+---
+
+# Post-phase-9 — the contact address is real
+
+Date: 2026-09-10. Not a phase. One placeholder closed and the documentation
+around it made true.
+
+## 1. What changed
+
+`frontend/src/lib/contact.ts` now holds a real address:
+
+```
+export const CONTACT_EMAIL = "headheartfrees@gmail.com";
+export const CONTACT_EMAIL_IS_PLACEHOLDER = false;
+```
+
+Both lines moved in the same edit, which is the whole point of the pair. The
+file's header comment was rewritten too: it was a set of instructions for
+filling in a blank, addressed to someone who no longer exists. It now says what
+the values are and what breaks if the two ever disagree.
+
+`/contact` itself was not restyled and its copy was not rewritten. The only
+change to `app/contact/page.tsx` is a stale comment that described the address
+as a placeholder.
+
+Two documentation cross-references were corrected in passing, because both had
+just become false:
+
+- `lib/support.ts` said its flag's polarity matched `CONTACT_EMAIL_IS_PLACEHOLDER`
+  "so the two placeholders read the same way". There is one placeholder now.
+- `HANDOVER.md`'s header still said "Phases 1-6 complete" while its own §3.5
+  recorded phase 9 as done on 2026-09-08.
+
+**The payment placeholder in `lib/support.ts` is untouched and still open.** It
+is a different decision belonging to the owner (HANDOVER §2.7, §2.8), and
+nothing here brings it closer.
+
+## 2. The four checks
+
+Not reasoned from the source. `/contact` was rendered and asserted against.
+
+| # | Check | Result |
+|---|---|---|
+| 1 | The "not live yet" notice is gone from `/contact` | Pass — the `caution` callout does not render, and no "will not arrive" text is in the document |
+| 1 | The mailto is correct | Pass — `mailto:headheartfrees@gmail.com?subject=HeadHeartFreeS%20enquiry`, and the address is no longer struck through |
+| 2 | HANDOVER no longer lists the address as something the owner must supply | Pass — §2.5 is struck through and marked SUPPLIED, and records that the account belongs to the project |
+| 3 | HANDOVER carries the note about what the inbox costs the person reading it | Pass — new §2.5.1 |
+| 4 | `/contact` still says it is not a crisis line and is not watched around the clock | Pass — the `important` callout, "not monitored around the clock", "nobody is watching it overnight" |
+| 4 | `/contact` still links to `/crisis-resources` | Pass — two links, one in the crisis callout and one under "What this inbox cannot do" |
+
+Checks 1 and 4 are now a test rather than an observation:
+`src/app/contact/page.test.tsx`, four cases. It was written to run the checks
+and kept because check 4 is the kind of thing a later tidy-up removes without
+anyone noticing — a callout that reads as boilerplate to someone who does not
+know why it is there.
+
+Suite: **78 frontend tests, 13 files, all passing** (was 74/12). `npm run
+typecheck` and `npm run lint` clean. The backend was not touched and was not
+run; the env/compose drift job is unaffected, since no environment variable is
+involved — the address is a compiled-in constant, deliberately.
+
+## 3. The inbox is a job, and HANDOVER now says so
+
+New §2.5.1, "What comes with the inbox".
+
+The address being real changes something that no test covers. Until today
+nobody could write to this site. Now they can, and on a mental health site some
+of what arrives will be hard to read — eventually somebody will write to it in
+real distress, or write something that stays with the reader after the tab is
+closed. Handing over a password without saying that is handing over a job while
+describing it as a credential.
+
+So the section is written to the person who will open the inbox, not as a
+warning attached to a config item. It says three things: that difficult mail is
+what a public address on this site means rather than a sign of something going
+wrong; that `/contact`'s "not a crisis line" framing is the honest answer to a
+message that cannot be answered in time, and must not be softened into a
+promise; and that the helplines on `/crisis-resources` are open to the reader
+too.
+
+That last one is deliberately the same note the moderation queue already
+carries — `ModeratorSupport` in `components/sections/ModerationQueue.tsx`, whose
+header explains why the moderator-facing wording had to differ from the
+visitor-facing one. The two roles are the same shape: a person reading
+unfiltered writing from strangers, with no way to reply. If the inbox and the
+queue end up with different people, the section says both should have read it.
+
+## 4. Why §2.5 was struck through rather than deleted
+
+Deleting it would renumber §2.6 through §2.8, and those numbers are load-bearing
+outside the file: `frontend/src/lib/support.ts` cites "HANDOVER.md section 2.7",
+and this log cites §2.7 and §2.8 in the phase 8 entry. Renumbering would
+silently redirect all of them.
+
+The document already had the idiom — §3.5 is a struck-through heading recording
+closed phase 9 blockers — so this follows it. §4's revocation table gains a row
+saying the inbox transfers rather than being revoked, which is the one thing
+about it that differs from every other credential in that table.

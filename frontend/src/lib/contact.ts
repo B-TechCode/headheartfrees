@@ -1,27 +1,26 @@
 /**
- * ============================================================================
- * PLACEHOLDER — NOT A REAL ADDRESS. EDIT THE LINE BELOW BEFORE ANY DEPLOY.
- * ============================================================================
+ * The contact address.
  *
- * `/contact` is complete apart from this one value. Replace the string on the
- * `CONTACT_EMAIL` line with the real inbox and nothing else needs to change:
- * the page, the mailto link and the displayed address all read from here.
+ * `/contact` reads everything from here: the displayed address, the mailto
+ * link, and whether the page carries a notice saying no inbox is connected
+ * yet. That notice was the safety net while this was a placeholder — a
+ * `mailto:` pointing at a domain that receives nothing is worse than an
+ * obvious placeholder, because it looks like it works and quietly swallows
+ * the message, including, on this product, messages from people having a bad
+ * day.
  *
- * It is deliberately not a plausible-looking address. A `mailto:` pointing at a
- * domain that receives nothing is worse than an obvious placeholder, because it
- * looks like it works and quietly swallows the message — including, on this
- * product, messages from people having a bad day.
+ * The address below is real and the notice is off. The account belongs to the
+ * project rather than to any one person, so it transfers with the site.
  *
- * `CONTACT_EMAIL_IS_PLACEHOLDER` drives a visible notice on the page. Set it to
- * `false` in the same edit, and the notice disappears.
+ * If this ever has to change, change both values together. A real address with
+ * the flag left `true` strikes the address through and tells visitors not to
+ * write; a dead address with the flag `false` takes the warning away.
  */
 
-/** ⬇⬇⬇  THE ONE LINE TO EDIT  ⬇⬇⬇ */
-export const CONTACT_EMAIL = "REPLACE-ME@example.invalid";
-/** ⬆⬆⬆  THE ONE LINE TO EDIT  ⬆⬆⬆ */
+export const CONTACT_EMAIL = "headheartfrees@gmail.com";
 
-/** Set to false in the same edit that supplies a real address above. */
-export const CONTACT_EMAIL_IS_PLACEHOLDER = true;
+/** False because the address above is a real inbox that a person reads. */
+export const CONTACT_EMAIL_IS_PLACEHOLDER = false;
 
 /** Prefilled subject, so a reply thread starts with some context. */
 export const CONTACT_MAILTO = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(

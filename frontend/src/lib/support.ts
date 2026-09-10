@@ -34,9 +34,9 @@ export const SUPPORT_UPI_ID = "REPLACE-ME@example.invalid";
  * Set to `false` in the same edit that supplies a real ID above.
  *
  * While `true`, `/support` shows a notice saying nothing can be given yet and
- * renders no payment details at all. Polarity matches
- * `CONTACT_EMAIL_IS_PLACEHOLDER` in `lib/contact.ts` so the two placeholders
- * read the same way.
+ * renders no payment details at all. Polarity follows
+ * `CONTACT_EMAIL_IS_PLACEHOLDER` in `lib/contact.ts`, which is now `false`
+ * because a real address was supplied. This one is still waiting.
  */
 export const SUPPORT_PAYMENT_IS_PLACEHOLDER = true;
 

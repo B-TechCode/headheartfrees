@@ -21,6 +21,10 @@ const API_ORIGIN = (() => {
 /**
  * Content-Security-Policy, built from what this app actually loads.
  *
+ * Production and development are built separately, and only production is
+ * shipped. `contentSecurityPolicy` below carries the whole argument for why
+ * the dev policy is looser and why that must not leak into a release.
+ *
  * ===========================================================================
  * Why script-src carries 'unsafe-inline', and when to change it
  * ===========================================================================
@@ -44,9 +48,11 @@ const API_ORIGIN = (() => {
  * The rest, and why each value is what it is
  * ===========================================================================
  *
- * - `style-src 'self'` with NO 'unsafe-inline'. Verified: zero <style> tags,
- *   zero style= attributes and zero style={{}} in source across every route.
- *   Most Next apps cannot say this; it is worth not giving up.
+ * - `style-src 'self'` with NO 'unsafe-inline' in production. Verified: zero
+ *   <style> tags, zero style= attributes and zero style={{}} in source across
+ *   every route. Most Next apps cannot say this; it is worth not giving up.
+ *   The dev server injects its stylesheets, so it relaxes this — see the note
+ *   on `contentSecurityPolicy` below for why development is built separately.
  * - `img-src 'self' data:` — the paper-grain overlay in globals.css is an
  *   inline SVG data: URL, and a CSS background-image is governed by img-src.
  * - `font-src 'self'` — next/font self-hosts; nothing is fetched from Google.
@@ -60,18 +66,66 @@ const API_ORIGIN = (() => {
  *   a form from posting off-site. The app uses fetch, not form posts, and the
  *   Google button is a link rather than a form, so none of these bind.
  */
-const CSP = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
-  "style-src 'self'",
-  "img-src 'self' data:",
-  "font-src 'self'",
-  `connect-src 'self' ${API_ORIGIN}`,
-  "frame-ancestors 'none'",
-  "base-uri 'none'",
-  "object-src 'none'",
-  "form-action 'self'",
-].join("; ");
+export type CspMode = "development" | "production";
+
+/**
+ * ===========================================================================
+ * Why `next dev` needs its own script-src, and why production must not get it
+ * ===========================================================================
+ *
+ * `headers()` applies in development exactly as it does in production, and the
+ * dev server is not the same application: Next injects React Fast Refresh,
+ * whose runtime (`@next/react-refresh-utils/dist/runtime.js`) calls `eval`.
+ * Under `script-src` without `'unsafe-eval'` that call throws inside a webpack
+ * module factory in `main-app.js` — and because it throws during the chunk's
+ * own execution, **the entire client bundle fails to boot**. Nothing hydrates.
+ *
+ * That failure is close to invisible and reads as a component bug. Server HTML
+ * still renders, so the page looks right; every client island is simply inert.
+ * On /vent the textarea keeps its own text the way plain HTML does, while the
+ * React state behind the counter and the release button stays empty — so the
+ * box accepts typing, the counter sits at `0 / 2000`, and "Release & Let Go"
+ * never enables. It looks precisely like a broken onChange handler in
+ * VentComposer, and it is not: that component is never mounted.
+ *
+ * So `'unsafe-eval'` is added in development ONLY. Production keeps the policy
+ * that was verified in a real browser in phase 9, byte for byte — that is what
+ * `next.config.test.ts` pins, in both directions. `'unsafe-eval'` in a shipped
+ * policy would give an injected string the ability to become code, which is
+ * most of what the rest of this header is here to prevent.
+ */
+export function contentSecurityPolicy(mode: CspMode, apiOrigin: string): string {
+  const scriptSrc =
+    mode === "development"
+      ? // Fast Refresh only. Never reachable from a production build.
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+      : "script-src 'self' 'unsafe-inline'";
+
+  return [
+    "default-src 'self'",
+    scriptSrc,
+    // The dev server serves compiled CSS through injected <style> tags rather
+    // than the static stylesheet links a production build emits.
+    mode === "development" ? "style-src 'self' 'unsafe-inline'" : "style-src 'self'",
+    "img-src 'self' data:",
+    "font-src 'self'",
+    // Dev additionally needs the HMR socket. `'self'` covers ws:// on the same
+    // host and port in current browsers, but naming it costs nothing and does
+    // not depend on that behaviour holding.
+    mode === "development"
+      ? `connect-src 'self' ${apiOrigin} ws: wss:`
+      : `connect-src 'self' ${apiOrigin}`,
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "object-src 'none'",
+    "form-action 'self'",
+  ].join("; ");
+}
+
+const CSP = contentSecurityPolicy(
+  process.env.NODE_ENV === "development" ? "development" : "production",
+  API_ORIGIN,
+);
 
 /**
  * Report-only mode, for verifying a policy before enforcing it.

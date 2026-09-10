@@ -35,7 +35,13 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
-    include: ["src/**/*.test.{ts,tsx}"],
+    // The second entry is for `next.config.test.ts`, which sits beside the
+    // config it tests because that is where someone changing the CSP will
+    // look. It is the one test in this suite that is not about a component:
+    // the phase 9 policy blocked the eval `next dev` needs, the client bundle
+    // stopped booting, and /vent looked like it had a broken onChange handler.
+    // No amount of jsdom catches that — jsdom does not enforce CSP at all.
+    include: ["src/**/*.test.{ts,tsx}", "next.config.test.ts"],
     clearMocks: true,
     restoreMocks: true,
     unstubGlobals: true,

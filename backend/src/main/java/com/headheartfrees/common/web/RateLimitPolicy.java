@@ -26,6 +26,28 @@ public enum RateLimitPolicy {
     AUTH(5, Duration.ofMinutes(1)),
 
     /**
+     * 10 per minute, covering every second-factor endpoint.
+     *
+     * <p>Its own bucket rather than sharing {@link #AUTH}, for the reason the
+     * separation exists at all: somebody who fumbles a six-digit code three
+     * times must not thereby lose the allowance that lets them sign in.
+     *
+     * <p>Looser than AUTH because a person legitimately retries a code - the
+     * digits change every thirty seconds, and typing one as it rolls over is
+     * the ordinary case rather than an attack.
+     *
+     * <p><strong>This is the weaker half of the defence and is not where the
+     * security comes from.</strong> Per-IP limiting is close to worthless here:
+     * behind Docker every visitor currently shares one bucket (HANDOVER 10.3),
+     * which makes this either evadable from a second address or a nuisance to
+     * everybody at once. The limit that holds is per account, on the
+     * {@code user_totp} row, where it compounds rather than resetting. See
+     * {@code UserTotp} for the arithmetic that makes the difference between a
+     * 40%-per-year chance of a hit and a 180-year one.
+     */
+    TOTP(10, Duration.ofMinutes(1)),
+
+    /**
      * 3 per hour, covering feedback submission (section 6).
      *
      * <p>Far tighter than the others because this is the only endpoint on the

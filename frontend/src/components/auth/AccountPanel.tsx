@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 import { focusRing } from "@/components/ui/styles";
 import { useSession } from "@/lib/auth/SessionProvider";
 import { describeAuthError } from "@/lib/auth/errors";
+import { TwoStepCard } from "@/components/auth/TwoStepCard";
 import type { UserSummary } from "@/lib/auth/types";
 
 /**
@@ -49,6 +50,10 @@ import type { UserSummary } from "@/lib/auth/types";
  *
  * **No password change.** Same reason as the missing "forgot password" on
  * /login: it needs email to be safe, and email does not exist yet.
+ *
+ * **Two-step sign-in IS here**, unlike the three above, because unlike them it
+ * needs nothing that does not exist. It requires no mail transport and no
+ * provider: a shared secret, a clock, and an app the person already has.
  */
 export function AccountPanel({ user: initialUser }: { user: UserSummary }) {
   const { authFetch, signOut } = useSession();
@@ -56,6 +61,17 @@ export function AccountPanel({ user: initialUser }: { user: UserSummary }) {
   const [user, setUser] = useState(initialUser);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+
+  /*
+   * Bumped to re-read /me after the second factor is turned on, off, or its
+   * codes are regenerated.
+   *
+   * The alternative - having TwoStepCard hand back a UserSummary - would mean
+   * two places constructing the same state and disagreeing about it. One
+   * refetch keeps the count and the on/off badge sourced from the server,
+   * which is the only thing that actually knows.
+   */
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +90,7 @@ export function AccountPanel({ user: initialUser }: { user: UserSummary }) {
     return () => {
       cancelled = true;
     };
-  }, [authFetch]);
+  }, [authFetch, reloadToken]);
 
   return (
     <div className="mt-10 max-w-2xl">
@@ -92,6 +108,8 @@ export function AccountPanel({ user: initialUser }: { user: UserSummary }) {
           {user.role === "ADMIN" ? <Row label="Role">Moderator</Row> : null}
         </dl>
       </Card>
+
+      <TwoStepCard user={user} onChanged={() => setReloadToken((n) => n + 1)} />
 
       <div className="mt-8">
         <Button

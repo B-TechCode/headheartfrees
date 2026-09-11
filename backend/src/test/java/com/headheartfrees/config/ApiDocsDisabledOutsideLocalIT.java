@@ -38,6 +38,13 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest(properties = {
     // A real 256-bit secret, so JwtSecretGuard permits a non-local boot.
     "app.auth.jwt-secret=dGhpcy1pcy1hLXRlc3Qtb25seS1zZWNyZXQtd2l0aC0zMitieXRlcy1pbi1pdA==",
+    // And a real 32-byte AES key, so TotpEncryptionKeyGuard permits one too.
+    // Both guards refuse the committed default outside `local`, and this class
+    // is the one test that boots outside `local` - so it is also the only place
+    // that proves an operator who sets BOTH secrets can actually start the
+    // application. Without this line the context fails and every assertion
+    // below reports a context error rather than an answer about Swagger.
+    "app.totp.encryption-key=dGVzdC1vbmx5LXRvdHAta2V5LWV4YWN0bHktMzJieXQ=",
 })
 @AutoConfigureMockMvc
 @ActiveProfiles(value = "ci", inheritProfiles = false)

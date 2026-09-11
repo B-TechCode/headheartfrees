@@ -24,6 +24,8 @@
     <bucket4j.version>8.10.1</bucket4j.version>
     <archunit.version>1.4.1</archunit.version>
     <bouncycastle.version>1.78.1</bouncycastle.version>
+    <java-otp.version>1.0.0</java-otp.version>
+    <qrcodegen.version>1.8.0</qrcodegen.version>
   </properties>
 
   <dependencies>
@@ -119,6 +121,54 @@
       <groupId>org.springdoc</groupId>
       <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
       <version>${springdoc.version}</version>
+    </dependency>
+
+    <!--
+      TOTP (RFC 6238), for the second factor on sign-in.
+
+      Chosen over writing the step arithmetic by hand, and over the two
+      obvious alternatives:
+
+        dev.samstevens.totp   last released November 2020, and pulls zxing
+                              plus commons-codec behind it.
+        com.atlassian:onetime maintained, but Kotlin - kotlin-stdlib would
+                              enter a Java-only runtime image for one
+                              algorithm.
+
+      java-otp is MIT, ~20KB, and has ZERO compile or runtime dependencies:
+      every <dependency> in its own POM is test scope. It does one thing -
+      derive a code from a key and an instant over javax.crypto.Mac - and has
+      no opinion about storage, Spring, or QR codes.
+    -->
+    <dependency>
+      <groupId>com.eatthepath</groupId>
+      <artifactId>java-otp</artifactId>
+      <version>${java-otp.version}</version>
+    </dependency>
+
+    <!--
+      QR encoding for the enrolment screen, rendered to an SVG data: URI by
+      TotpQrCode.
+
+      Last released April 2022, and that is NOT rot. QR is a frozen ISO
+      specification (ISO/IEC 18004) and this is a complete, finished
+      implementation of it by Project Nayuki with no dependencies and nothing
+      left to track. There is no upstream moving underneath it. Judge it on
+      whether it still encodes the spec, which it does, rather than on the
+      date - and see PHASE_LOG for why that distinction was made deliberately
+      rather than overlooked.
+
+      It lives on the backend, not the frontend, for two reasons: the frontend
+      has zero runtime dependencies today and that is worth keeping, and the
+      production CSP is `style-src 'self'` with no 'unsafe-inline' (verified
+      in phase 9), which a client-side QR component would be one inline style
+      away from breaking. An <img src="data:image/svg+xml;base64,..."> is
+      already covered by the existing `img-src 'self' data:`.
+    -->
+    <dependency>
+      <groupId>io.nayuki</groupId>
+      <artifactId>qrcodegen</artifactId>
+      <version>${qrcodegen.version}</version>
     </dependency>
 
     <dependency>

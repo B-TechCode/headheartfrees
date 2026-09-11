@@ -14,6 +14,8 @@ import { useSession } from "@/lib/auth/SessionProvider";
 import { describeAuthError, fieldErrorsOf } from "@/lib/auth/errors";
 import { GOOGLE_SIGN_IN_ENABLED, describeCallbackError } from "@/lib/auth/google";
 import { sanitiseReturnTo } from "@/lib/auth/return-to";
+import { SecondFactorForm } from "@/components/auth/SecondFactorForm";
+import { TotpEnrolmentStep } from "@/components/auth/TotpEnrolmentStep";
 
 /**
  * Sign in.
@@ -29,13 +31,27 @@ import { sanitiseReturnTo } from "@/lib/auth/return-to";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { status, signIn } = useSession();
+  const { status, signIn, completeSecondFactor } = useSession();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  /*
+   * The half-finished sign-in, held in memory for the life of this component
+   * and nowhere else.
+   *
+   * Not in the URL, not in sessionStorage, not in a cookie. A ticket is a live
+   * credential, and a query string lands in browser history and in every proxy
+   * log between here and the person. Held here, a reload loses it - and losing
+   * it is the right outcome: they re-enter a password they know and get a
+   * fresh one.
+   */
+  const [challenge, setChallenge] = useState<
+    { kind: "code-required" | "enrolment-required"; ticket: string } | null
+  >(null);
 
   // Where to go afterwards. Sanitised on the way in: this arrives in a URL a
   // person can edit, and `//evil.example` starts with a slash too.
@@ -68,7 +84,18 @@ export function LoginForm() {
     setFieldErrors({});
 
     try {
-      await signIn(email, password);
+      const outcome = await signIn(email, password);
+
+      if (outcome.kind !== "signed-in") {
+        // The password was right and it bought a step, not a session. Swap the
+        // form. `submitting` goes back to false because there is a new form to
+        // interact with, unlike the signed-in path below.
+        setChallenge({ kind: outcome.kind, ticket: outcome.ticket });
+        setPassword("");
+        setSubmitting(false);
+        return;
+      }
+
       // No navigation here - the effect above owns it. `submitting` is left
       // true on purpose, so the button stays in its loading state through the
       // redirect rather than flicking back to "Sign in" for a frame.
@@ -77,6 +104,30 @@ export function LoginForm() {
       setFieldErrors(fieldErrorsOf(error));
       setSubmitting(false);
     }
+  }
+
+  function startAgain() {
+    setChallenge(null);
+    setFormError(null);
+    setFieldErrors({});
+  }
+
+  if (challenge?.kind === "code-required") {
+    return (
+      <SecondFactorForm
+        onSubmit={(code) => completeSecondFactor(challenge.ticket, code)}
+        onCancel={startAgain}
+      />
+    );
+  }
+
+  if (challenge?.kind === "enrolment-required") {
+    // An admin who has never enrolled. Their password still works and it still
+    // reaches a screen with a QR code on it - the only thing it no longer
+    // reaches is the moderation queue. Without this branch, turning the
+    // requirement on would lock out every admin who had not already enrolled,
+    // which on the day it ships is all of them.
+    return <TotpEnrolmentStep ticket={challenge.ticket} onCancel={startAgain} />;
   }
 
   return (

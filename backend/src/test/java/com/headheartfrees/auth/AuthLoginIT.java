@@ -25,11 +25,21 @@ class AuthLoginIT extends AuthTestSupport {
 
         MvcResult result = login(EMAIL, PASSWORD)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.expiresIn").value(900))
-                .andExpect(jsonPath("$.user.email").value(EMAIL))
-                .andExpect(jsonPath("$.user.role").value("USER"))
+                // The session now nests under `session`, behind a `status`
+                // discriminator: a correct password no longer always means a
+                // session, and the body says which of the three outcomes this
+                // is. See LoginResponse.
+                .andExpect(jsonPath("$.status").value("AUTHENTICATED"))
+                .andExpect(jsonPath("$.session.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.session.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.session.expiresIn").value(900))
+                .andExpect(jsonPath("$.session.user.email").value(EMAIL))
+                .andExpect(jsonPath("$.session.user.role").value("USER"))
+                // A USER with no second factor: offered, not required, and not
+                // enrolled. This is the ordinary case and it must stay
+                // unchanged by this phase.
+                .andExpect(jsonPath("$.session.user.totpEnabled").value(false))
+                .andExpect(jsonPath("$.session.user.totpRequired").value(false))
                 .andReturn();
 
         assertThat(accessTokenOf(result).split("\\."))

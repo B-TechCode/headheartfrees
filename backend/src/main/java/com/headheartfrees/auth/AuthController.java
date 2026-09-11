@@ -73,16 +73,44 @@ class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(RegistrationResponse.shared());
     }
 
+    /**
+     * Checks the password. Issues a session only if nothing else is owed.
+     *
+     * <p>Three possible bodies, all 200, discriminated by {@code status} - see
+     * {@link LoginResponse}. A correct password on an account with a second
+     * factor produces a ticket and <strong>no</strong> access token and
+     * <strong>no</strong> {@code Set-Cookie}; that is the requirement this
+     * phase exists for, and it is visible here in the fact that only one branch
+     * below calls {@code respondWithTokens}.
+     */
     @PostMapping("/login")
     @Operation(
             summary = "Sign in",
-            description = "Access token in the body, refresh token in an httpOnly cookie. "
-                    + "One generic error for every failure mode.")
-    ResponseEntity<AccessTokenResponse> login(
+            description = "Returns AUTHENTICATED with an access token and a refresh cookie, or "
+                    + "TOTP_REQUIRED / TOTP_ENROLMENT_REQUIRED with a short-lived ticket and no "
+                    + "session at all. One generic error for every failure mode.")
+    ResponseEntity<LoginResponse> login(
             @Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
 
         enforceRateLimit(httpRequest);
-        return respondWithTokens(authService.login(request.email(), request.password()));
+
+        // Exhaustive over a sealed type: a fourth outcome cannot be added
+        // without this switch failing to compile, which is the point of
+        // LoginOutcome being sealed rather than a nullable field.
+        return switch (authService.login(request.email(), request.password())) {
+            case LoginOutcome.Authenticated(TokenPair tokens) -> {
+                ResponseEntity<AccessTokenResponse> session = respondWithTokens(tokens);
+                yield ResponseEntity.ok()
+                        .headers(session.getHeaders())
+                        .body(LoginResponse.authenticated(session.getBody()));
+            }
+            case LoginOutcome.SecondFactorRequired(String ticket, java.time.Duration ttl) ->
+                    ResponseEntity.ok(LoginResponse.challenge(
+                            LoginResponse.TOTP_REQUIRED, ticket, ttl.toSeconds()));
+            case LoginOutcome.EnrolmentRequired(String ticket, java.time.Duration ttl) ->
+                    ResponseEntity.ok(LoginResponse.challenge(
+                            LoginResponse.TOTP_ENROLMENT_REQUIRED, ticket, ttl.toSeconds()));
+        };
     }
 
     /**

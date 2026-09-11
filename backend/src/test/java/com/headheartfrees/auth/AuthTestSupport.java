@@ -106,9 +106,43 @@ abstract class AuthTestSupport extends com.headheartfrees.PostgresTestBase {
                 .content(body));
     }
 
+    /**
+     * The access token from a login, a TOTP completion, or a refresh.
+     *
+     * <p>Two shapes, because {@code /login} and {@code /login/totp} wrap the
+     * session in a discriminated {@link LoginResponse} while {@code /refresh}
+     * returns the bare {@code AccessTokenResponse}. Handled here rather than at
+     * thirty call sites.
+     *
+     * <p>Fails loudly on a challenge response rather than returning null. A
+     * test that thought it had signed in and silently got a ticket would fail
+     * later, somewhere unrelated, with a 401.
+     */
     protected String accessTokenOf(MvcResult result) throws Exception {
         JsonNode json = objectMapper.readTree(result.getResponse().getContentAsString());
-        return json.get("accessToken").asText();
+        JsonNode session = json.has("session") ? json.get("session") : json;
+        if (session == null || !session.has("accessToken")) {
+            throw new AssertionError(
+                    "No access token on the response. This is a challenge, not a session. Body: "
+                            + json);
+        }
+        return session.get("accessToken").asText();
+    }
+
+    /** The {@code status} discriminator from a {@code /login} response. */
+    protected String loginStatusOf(MvcResult result) throws Exception {
+        return objectMapper.readTree(result.getResponse().getContentAsString())
+                .path("status")
+                .asText();
+    }
+
+    /** The challenge or enrolment ticket from a {@code /login} response. */
+    protected String ticketOf(MvcResult result) throws Exception {
+        JsonNode json = objectMapper.readTree(result.getResponse().getContentAsString());
+        if (!json.has("ticket")) {
+            throw new AssertionError("No ticket on the response. Body: " + json);
+        }
+        return json.get("ticket").asText();
     }
 
     /**

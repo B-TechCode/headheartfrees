@@ -66,11 +66,21 @@ export function aUser(overrides: Record<string, unknown> = {}) {
     role: "USER",
     emailVerified: false,
     createdAt: "2026-01-05T09:30:00Z",
+    // The default is an ordinary USER with no second factor, because that is
+    // the ordinary case and the one most likely to regress unnoticed.
+    totpEnabled: false,
+    totpRequired: false,
+    backupCodesRemaining: 0,
     ...overrides,
   };
 }
 
-/** The body of a successful login or refresh. */
+/**
+ * The body of a successful refresh - a bare `AccessTokenResponse`.
+ *
+ * `/refresh` still returns this shape. `/login` and `/login/totp` wrap it, see
+ * `anAuthenticatedLogin` below.
+ */
 export function aSession(overrides: Record<string, unknown> = {}) {
   return {
     accessToken: "header.payload.signature",
@@ -79,6 +89,41 @@ export function aSession(overrides: Record<string, unknown> = {}) {
     user: aUser(),
     ...overrides,
   };
+}
+
+/** `POST /auth/login` when nothing further is owed. */
+export function anAuthenticatedLogin(sessionOverrides: Record<string, unknown> = {}) {
+  return { status: "AUTHENTICATED", session: aSession(sessionOverrides) };
+}
+
+/**
+ * `POST /auth/login` when the account holds a second factor.
+ *
+ * Note what is NOT here: no `session`, no `accessToken`, no `user`. The key is
+ * absent rather than null, which is exactly how the API sends it - so a client
+ * that tried to read a session off this would get `undefined` rather than
+ * something half-shaped.
+ */
+export function aTotpChallenge(ticket = "ticket.for.the.code.step") {
+  return { status: "TOTP_REQUIRED", ticket, ticketExpiresIn: 300 };
+}
+
+/** `POST /auth/login` for an ADMIN that has never enrolled. */
+export function anEnrolmentChallenge(ticket = "ticket.for.enrolment") {
+  return { status: "TOTP_ENROLMENT_REQUIRED", ticket, ticketExpiresIn: 300 };
+}
+
+/** The single generic 401 every failure of the code step returns. */
+export function invalidTotpCode(path = "/api/v1/auth/login/totp"): Response {
+  return jsonResponse(401, {
+    timestamp: new Date().toISOString(),
+    status: 401,
+    code: "INVALID_TOTP_CODE",
+    message:
+      "That code is not valid. Check your authenticator app and that your phone's clock is " +
+      "set automatically, then try again.",
+    path,
+  });
 }
 
 /**

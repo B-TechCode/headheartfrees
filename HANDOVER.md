@@ -366,7 +366,23 @@ At handover the owner should assume the developer retains nothing, and verify it
 | GitHub repository access | Transfer ownership or remove the developer as a collaborator. |
 | The contact inbox (`headheartfrees@gmail.com`) | **Transfers, not revoked.** It is the project's account, not a person's — hand over the password and recovery details, then change the password and remove any other recovery address or device still attached. See §2.5. |
 | Any deployment or database access | Rotate credentials after handover, regardless of trust. |
+| **The developer's address in `APP_ADMIN_BOOTSTRAP_EMAILS`** | **Remove it.** Adding the owner's address is only half the job: the variable is a list, and an address left in it is re-promoted to ADMIN on every restart. Doing one and forgetting the other leaves the developer with permanent admin access — and therefore the moderation queue — on a site they no longer run. Removing the address does not demote an existing admin, so run the SQL below as well. |
 | Developer's social and portfolio links in the site footer | **Still live on every page.** These are the developer's personal accounts, not the project's, and unlike the other placeholders nothing on screen says so. Replace or delete the four URLs in `frontend/src/lib/social.ts` — see §2.9. This is the item most likely to be missed, because nothing breaks if it is. |
+
+After editing `APP_ADMIN_BOOTSTRAP_EMAILS`, demote the developer's account and
+confirm who is left:
+
+```sql
+-- Demote the developer.
+UPDATE users SET role = 'USER' WHERE email = 'developer@example.com';
+
+-- Then check. This should list the owner's address and nothing else.
+SELECT email, role FROM users WHERE role = 'ADMIN';
+```
+
+Restart the backend afterwards and run the SELECT once more. If the developer's
+address is still in the variable, the restart puts it straight back, and the
+second SELECT is what tells you.
 
 Rotating credentials at handover is normal practice and is not a statement about
 anyone. It is simply how you make the boundary real.
@@ -442,6 +458,127 @@ To undo, remove the address from the variable and run:
 UPDATE users SET role = 'USER' WHERE email = 'them@example.com';
 ```
 
+### The admin account requires two-step sign-in
+
+**An admin signs in with an email, a password, and a six-digit code from an
+authenticator app.** This is not optional and cannot be turned off from inside
+the site. It applies to ADMIN accounts only; ordinary users may turn it on if
+they want it, and most will not.
+
+The admin account is the only one on this site that can read the moderation
+queue — every note a stranger submitted, including the ones never published. A
+password on its own is not enough for that.
+
+**What happens the first time an admin signs in after this was deployed,
+including the account you were just promoted:**
+
+1. Email and password, as before.
+2. Instead of the site, a setup screen appears: a QR code, the same key written
+   out as text, and a box for a code.
+3. Scan the QR with any authenticator app — Google Authenticator, 1Password,
+   Bitwarden, Aegis. Or type the key in by hand if the camera will not play.
+4. Enter the six digits the app shows. **Nothing is switched on until a real
+   code has worked**, so a mistyped key fails here where you can see it rather
+   than at your next sign-in where it would lock you out.
+5. Ten backup codes appear. Read the next section before clicking past them.
+6. Clicking through signs you in. You do not have to sign in again.
+
+**Nobody is locked out by this.** The password still works and still reaches
+that screen. The only thing it no longer reaches on its own is the moderation
+queue.
+
+One consequence worth knowing: **any session an admin had open before this was
+deployed is ended.** The first time such a session tries to renew itself the
+server revokes it and asks for a fresh sign-in. That is deliberate — without it,
+a browser signed in before the change would keep working for thirty days without
+ever meeting the requirement.
+
+### Google sign-in does not work on an admin account
+
+Deliberately. Google is a second, separate route to a session that never touches
+the password form, so an admin signing in through it would be using one factor
+and the requirement would mean nothing.
+
+An admin who clicks the Google button is returned to `/login` with a message
+saying admin accounts use a password and a code. Nothing is broken and nothing
+is written to the account — if the role is ever removed, Google sign-in simply
+works again.
+
+Ordinary users are unaffected: Google works for them exactly as it always did.
+
+### Backup codes — where they come from, and that they are shown once
+
+Ten codes are generated at the moment two-step sign-in is turned on, and shown
+on the screen immediately after. **That is the only time they exist anywhere but
+in your own hands.** They are hashed the way passwords are hashed before they
+reach the database, and there is no page, no endpoint and no support request
+that can show them to you again.
+
+Each one signs you in once, in place of a code from the app, and is then dead.
+
+Save them somewhere you can reach **without this site and without your phone**:
+a password manager, or paper in a drawer. If you close that screen without
+saving them, generate a new set from `/account` while your authenticator still
+works — that page shows how many you have left and replaces all ten at once.
+
+### If an admin is locked out — the recovery procedure
+
+Reach for this when the phone is gone **and** the backup codes are gone. It is
+the only way back, and it needs database access, which means it needs the owner
+or whoever operates the server.
+
+Connect to the database — under compose:
+
+```
+docker compose exec db psql -U headheartfrees -d headheartfrees
+```
+
+Confirm which account you mean before changing anything:
+
+```sql
+SELECT u.id, u.email, u.role,
+       t.confirmed_at IS NOT NULL AS has_two_step,
+       (SELECT count(*) FROM user_totp_backup_code b
+         WHERE b.user_id = u.id AND b.used_at IS NULL) AS unused_backup_codes
+FROM users u
+LEFT JOIN user_totp t ON t.user_id = u.id
+WHERE u.email = 'them@example.com';
+```
+
+Then remove the second factor for that account, and only that account:
+
+```sql
+-- Removes the enrolment. The account keeps its password, its role, and
+-- everything else. The WHERE clause is a subquery on the email rather than a
+-- pasted UUID so there is nothing to mistype.
+DELETE FROM user_totp
+ WHERE user_id = (SELECT id FROM users WHERE email = 'them@example.com');
+
+-- The backup codes belonged to the enrolment that no longer exists.
+DELETE FROM user_totp_backup_code
+ WHERE user_id = (SELECT id FROM users WHERE email = 'them@example.com');
+
+-- And end every session, on every device. The person locked out is not
+-- necessarily the only person who has been trying.
+UPDATE refresh_tokens SET revoked_at = now()
+ WHERE revoked_at IS NULL
+   AND user_id = (SELECT id FROM users WHERE email = 'them@example.com');
+```
+
+No restart is needed. The account is now back to where it was before enrolment:
+the next sign-in with the password lands on the setup screen, a new QR is
+generated, and a new set of backup codes is issued.
+
+**Two warnings.**
+
+*Do not* try to "fix" this by editing `user_totp` — setting `confirmed_at` to
+null, clearing `failed_attempts`, and so on. The row holds a secret that only
+the lost phone knows. Deleting it is the operation; anything else leaves an
+enrolment nobody can satisfy.
+
+*Do* treat the need for this as worth asking about. A legitimate lockout is a
+lost phone. It is also what an attacker who has the password would ask for.
+
 ---
 
 ## 7. Environment variables
@@ -453,7 +590,8 @@ be committed.
 
 | Variable | Notes |
 |---|---|
-| `APP_JWT_SECRET` | `openssl rand -base64 48`. App refuses to start without it. |
+| `APP_JWT_SECRET` | `openssl rand -base64 48`. App refuses to start without it. **Keep a copy — it cannot be regenerated.** |
+| `APP_TOTP_ENCRYPTION_KEY` | `openssl rand -base64 32` — exactly 32 bytes, not 48. Encrypts the stored two-step secrets. App refuses to start on the committed default outside the `local` profile. **Keep a copy. See the warning below.** |
 | `SPRING_DATASOURCE_URL` | Real database, not the compose default |
 | `SPRING_DATASOURCE_USERNAME` | |
 | `SPRING_DATASOURCE_PASSWORD` | |
@@ -473,6 +611,35 @@ be committed.
 | `APP_COOKIE_SECURE` | `true` | Leave true. False only for a LAN IP with no TLS. |
 | `APP_JWT_ACCESS_TOKEN_TTL` | `PT15M` | |
 | `APP_JWT_REFRESH_TOKEN_TTL` | `P30D` | |
+| `APP_TOTP_ISSUER` | `HeadHeartFreeS` | The name an authenticator app files the entry under |
+| `APP_TOTP_CHALLENGE_TTL` | `PT5M` | How long a half-finished sign-in stays usable before the code must be entered |
+| `APP_TOTP_DRIFT_STEPS` | `1` | 30-second steps accepted either side of now. **Leave it at 1.** Each extra step adds two more simultaneously valid codes and multiplies the guessing surface; the app refuses to start above 2. |
+| `APP_TOTP_BACKUP_CODE_COUNT` | `10` | Recovery codes issued at enrolment |
+
+### The two secrets you must not lose
+
+`APP_JWT_SECRET` and `APP_TOTP_ENCRYPTION_KEY` are both generated once and kept
+forever. Neither can be worked out from anything else, and neither can be
+regenerated without consequences.
+
+**Losing `APP_TOTP_ENCRYPTION_KEY` means every enrolled account must enrol
+again.** Backup codes still work — they are hashed rather than encrypted — and
+past those, the recovery SQL in §6 is what is left. Back it up wherever you back
+up the database password.
+
+**What that key does and does not protect, stated plainly.** It encrypts the
+two-step secret at rest with AES-256. Somebody who obtains *only* the database —
+a dump, a stolen backup, a read replica, a cloud console, a SQL injection —
+gets ciphertext and nothing they can use. Somebody who has the database **and**
+the application's environment can decrypt every secret and generate valid codes
+for any account, indefinitely and silently. That includes anyone with root on
+the server or read access to its environment variables. The key separates those
+two situations. It is not a vault, and it is worth knowing which one you are
+defending against before relying on it.
+
+Without it — that is, if the secrets were stored as plain text — a database
+backup left in the wrong bucket would be a complete bypass of two-step sign-in
+for every account in it.
 
 ---
 

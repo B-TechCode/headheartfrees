@@ -1,6 +1,9 @@
 package com.headheartfrees.auth;
 
+import com.headheartfrees.config.TotpProperties;
 import java.time.Clock;
+import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -21,19 +24,25 @@ class DefaultAuthService implements AuthService {
     private final RefreshTokenService refreshTokens;
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
+    private final TotpService totp;
     private final Clock clock;
+    private final Duration challengeTtl;
 
     DefaultAuthService(
             UserAccountRepository users,
             RefreshTokenService refreshTokens,
             JwtService jwtService,
             PasswordEncoder passwordEncoder,
-            Clock clock) {
+            TotpService totp,
+            Clock clock,
+            TotpProperties totpProperties) {
         this.users = users;
         this.refreshTokens = refreshTokens;
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
+        this.totp = totp;
         this.clock = clock;
+        this.challengeTtl = totpProperties.challengeTtl();
     }
 
     /**
@@ -90,9 +99,26 @@ class DefaultAuthService implements AuthService {
         log.info("Registered account {}", account.getId());
     }
 
+    /**
+     * Password first, then - for anyone who owes one - a code.
+     *
+     * <h2>The ordering is the guarantee</h2>
+     *
+     * Nothing below the password check issues a token. The two {@code return}s
+     * that are not {@link LoginOutcome.Authenticated} hand back a ticket that
+     * {@link JwtAuthenticationFilter} refuses as a Bearer token, so there is no
+     * path from here to an authenticated request without a second factor
+     * having been presented.
+     *
+     * <h2>Why an unenrolled ADMIN gets a ticket rather than a refusal</h2>
+     *
+     * Because the alternative locks out every admin on the day this deploys,
+     * and this install has exactly one. See
+     * {@link LoginOutcome.EnrolmentRequired}.
+     */
     @Override
     @Transactional
-    public TokenPair login(String email, String password) {
+    public LoginOutcome login(String email, String password) {
         Optional<UserAccount> found = users.findByEmail(email == null ? "" : email.trim());
 
         if (found.isEmpty()) {
@@ -119,7 +145,122 @@ class DefaultAuthService implements AuthService {
             throw new InvalidCredentialsException();
         }
 
-        return issueFor(account, refreshTokens.issueNewFamily(account.getId()));
+        return afterPasswordAccepted(account);
+    }
+
+    /**
+     * The one place that decides whether a verified password is enough.
+     *
+     * <p>Reached from {@link #login} only, because every other route to a
+     * session is either refused outright or forced back through it:
+     * {@link GoogleSignInHandler} refuses ADMIN accounts, and {@link #refresh}
+     * revokes an ADMIN family that owes a factor.
+     */
+    private LoginOutcome afterPasswordAccepted(UserAccount account) {
+        if (totp.isEnrolled(account.getId())) {
+            return new LoginOutcome.SecondFactorRequired(
+                    jwtService.issueTicket(
+                            account.getId(), JwtService.TYPE_TOTP_CHALLENGE, challengeTtl),
+                    challengeTtl);
+        }
+
+        if (TotpService.isRequiredFor(account.getRole())) {
+            log.info("Account {} must enrol a second factor before signing in", account.getId());
+            return new LoginOutcome.EnrolmentRequired(
+                    jwtService.issueTicket(
+                            account.getId(), JwtService.TYPE_TOTP_ENROLMENT, challengeTtl),
+                    challengeTtl);
+        }
+
+        return new LoginOutcome.Authenticated(
+                issueFor(account, refreshTokens.issueNewFamily(account.getId())));
+    }
+
+    @Override
+    // noRollbackFor: the failure path deliberately commits an incremented
+    // attempt counter and then throws. See TotpService.verifySecondFactor -
+    // both layers need the exclusion, because they share one physical
+    // transaction and either marking it rollback-only loses the write, which
+    // turns the attempt limit into decoration.
+    @Transactional(noRollbackFor = InvalidTotpCodeException.class)
+    public TokenPair completeSecondFactor(String ticket, String code) {
+        UUID userId = jwtService.verifyTicket(ticket, JwtService.TYPE_TOTP_CHALLENGE)
+                .orElseThrow(InvalidTotpCodeException::new);
+
+        // Throws on every failure, and counts the ones that were guesses.
+        totp.verifySecondFactor(userId, code);
+
+        UserAccount account = users.findById(userId).orElseThrow(InvalidCredentialsException::new);
+        return issueFor(account, refreshTokens.issueNewFamily(userId));
+    }
+
+    @Override
+    public UUID resolveEnrolmentTicket(String ticket) {
+        return jwtService.verifyTicket(ticket, JwtService.TYPE_TOTP_ENROLMENT)
+                .orElseThrow(InvalidTotpCodeException::new);
+    }
+
+    @Override
+    @Transactional
+    public TotpService.TotpSetup beginTotpSetup(UUID userId) {
+        UserAccount account = users.findById(userId).orElseThrow(InvalidCredentialsException::new);
+        return totp.beginSetup(userId, account.getEmail());
+    }
+
+    @Override
+    @Transactional(noRollbackFor = InvalidTotpCodeException.class)
+    public TotpEnableResult enableTotp(UUID userId, String code, boolean issueSession) {
+        List<String> backupCodes = totp.enable(userId, code);
+
+        if (!issueSession) {
+            return new TotpEnableResult(backupCodes, null);
+        }
+
+        UserAccount account = users.findById(userId).orElseThrow(InvalidCredentialsException::new);
+        return new TotpEnableResult(
+                backupCodes, issueFor(account, refreshTokens.issueNewFamily(userId)));
+    }
+
+    @Override
+    @Transactional(noRollbackFor = InvalidTotpCodeException.class)
+    public List<String> regenerateBackupCodes(UUID userId, String code) {
+        return totp.regenerateBackupCodes(userId, code);
+    }
+
+    /**
+     * Password <em>and</em> a current code, both.
+     *
+     * <p>Requiring the password too is the point. The threat this guards is a
+     * session somebody else is holding - a borrowed laptop, a stolen access
+     * token - and a session is exactly what an attacker in that position
+     * already has. Without the password, turning the second factor off would be
+     * the one move a hijacked session could make to render itself permanent.
+     */
+    @Override
+    @Transactional(noRollbackFor = InvalidTotpCodeException.class)
+    public void disableTotp(UUID userId, String password, String code) {
+        UserAccount account = users.findById(userId).orElseThrow(InvalidCredentialsException::new);
+
+        String storedHash = account.getPasswordHash();
+        if (storedHash == null
+                || password == null
+                || !passwordEncoder.matches(password, storedHash)) {
+            throw new InvalidCredentialsException();
+        }
+
+        // The code is verified before the role is checked, so a USER and an
+        // ADMIN take the same path to the same point. Checking the role first
+        // would let an admin learn the action is refused without presenting
+        // anything - not a secret, but the ordering costs nothing and keeps one
+        // shape.
+        totp.verifySecondFactor(userId, code);
+        totp.disable(userId, account.getRole());
+
+        // Everything issued to another device is revoked. Weakening an
+        // account's sign-in is a security event, and leaving other sessions
+        // live would mean the weakened account is still reachable from wherever
+        // it was already signed in.
+        refreshTokens.revokeAllFor(userId);
     }
 
     @Override
@@ -142,6 +283,23 @@ class DefaultAuthService implements AuthService {
         UserAccount account = users.findById(issued.userId())
                 .orElseThrow(InvalidCredentialsException::new);
 
+        // Closing the deploy-day hole. See AuthService.refresh for why it is
+        // here rather than left to the next sign-in: a refresh cookie issued
+        // before this feature existed is otherwise thirty days of admin access
+        // that never meets the requirement.
+        //
+        // AFTER rotate(), deliberately. Rotation has already spent the
+        // presented token, so this cannot be worked around by presenting it
+        // again - that path is reuse detection, which revokes the family too.
+        if (TotpService.isRequiredFor(account.getRole()) && !totp.isEnrolled(account.getId())) {
+            log.info(
+                    "Revoking sessions for admin account {}: it holds no second factor, so this "
+                            + "refresh family predates the requirement and must not outlive it",
+                    account.getId());
+            refreshTokens.revokeAllFor(account.getId());
+            throw new InvalidCredentialsException();
+        }
+
         return issueFor(account, issued);
     }
 
@@ -155,8 +313,17 @@ class DefaultAuthService implements AuthService {
     @Transactional(readOnly = true)
     public UserSummary summarise(UUID userId) {
         return users.findById(userId)
-                .map(UserAccount::toSummary)
+                .map(this::summarise)
                 .orElseThrow(InvalidCredentialsException::new);
+    }
+
+    /**
+     * The one place a {@link UserSummary} is built, so the second-factor state
+     * on it cannot be current in one response and stale in another.
+     */
+    private UserSummary summarise(UserAccount account) {
+        return account.toSummary(
+                totp.isEnrolled(account.getId()), totp.remainingBackupCodes(account.getId()));
     }
 
     private TokenPair issueFor(UserAccount account, RefreshTokenService.IssuedToken refresh) {
@@ -166,7 +333,7 @@ class DefaultAuthService implements AuthService {
                 jwtService.accessTokenTtl(),
                 refresh.token(),
                 refresh.ttl(),
-                account.toSummary());
+                summarise(account));
     }
 
     private static String trimToNull(String value) {

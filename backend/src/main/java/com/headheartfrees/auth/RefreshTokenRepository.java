@@ -30,6 +30,21 @@ interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID> {
     int revokeFamily(@Param("familyId") UUID familyId, @Param("now") Instant now);
 
     /**
+     * Revokes every unrevoked token belonging to one account, across all of its
+     * families.
+     *
+     * <p>Broader than {@link #revokeFamily}, and used where the account itself
+     * has changed standing rather than where one sign-in went wrong: an admin
+     * whose refresh family predates the second-factor requirement, and an
+     * account that has just turned its second factor off. In both cases every
+     * device must be signed out, not just the one that happened to call.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update RefreshToken t set t.revokedAt = :now "
+            + "where t.userId = :userId and t.revokedAt is null")
+    int revokeAllForUser(@Param("userId") UUID userId, @Param("now") Instant now);
+
+    /**
      * Deletes rows whose token expired before {@code cutoff}, revoked or not.
      *
      * <p>Both cases are covered on purpose and the second is the one easy to

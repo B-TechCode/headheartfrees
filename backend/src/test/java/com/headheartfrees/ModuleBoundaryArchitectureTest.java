@@ -1,6 +1,8 @@
 package com.headheartfrees;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
@@ -40,6 +42,7 @@ class ModuleBoundaryArchitectureTest {
     private static final String AUTH = "com.headheartfrees.auth..";
     private static final String VENT = "com.headheartfrees.vent..";
     private static final String FEEDBACK = "com.headheartfrees.feedback..";
+    private static final String CONFIG = "com.headheartfrees.config..";
 
     /**
      * Both packages, imported together. Importing only one would make every
@@ -94,6 +97,68 @@ class ModuleBoundaryArchitectureTest {
                         + "Reference other domains by ID, never by association.");
 
         rule.check(CLASSES);
+    }
+
+    /**
+     * The second factor lives in {@code auth}, and nowhere else.
+     *
+     * <h2>Why this is needed on top of the rules above</h2>
+     *
+     * Those rules protect {@code vent} from what {@code auth} contains. They
+     * say nothing about a TOTP class placed <em>outside</em> {@code auth} - in
+     * {@code common.web}, say, because "the rate limiter is there and this
+     * needs rate limiting". A class in that position is outside every boundary
+     * this file enforces, and could then be imported from {@code vent} without
+     * any rule here firing.
+     *
+     * <p>The two configuration types are the deliberate exception: they bind
+     * environment properties and guard a startup value, which is what
+     * {@code config} is for, and neither ever holds a secret in flight. The
+     * cipher that does is in {@code auth}.
+     *
+     * <p>Matching by name prefix rather than by a list means a type added later
+     * is covered without anybody remembering to come back here.
+     */
+    @Test
+    @DisplayName("every TOTP type lives inside auth, where the boundary rules reach it")
+    void totpTypesStayInsideAuth() {
+        classes()
+                .that().haveSimpleNameStartingWith("Totp")
+                .or().haveSimpleNameStartingWith("UserTotp")
+                .should().resideInAnyPackage(AUTH, CONFIG)
+                .because("A TOTP type outside `auth` sits outside every boundary this file "
+                        + "enforces. Only the two configuration bindings belong in `config`.")
+                .check(CLASSES);
+
+        // Narrower, and the one that matters: the types that hold or transform
+        // the credential itself have no business anywhere but `auth`.
+        classes()
+                .that().haveSimpleName("TotpService")
+                .or().haveSimpleName("TotpSecretCipher")
+                .or().haveSimpleName("UserTotp")
+                .or().haveSimpleName("TotpBackupCode")
+                .or().haveSimpleName("Base32")
+                .should().resideInAPackage(AUTH)
+                .because("These hold or transform the second-factor credential.")
+                .check(CLASSES);
+    }
+
+    @Test
+    @DisplayName("the TOTP rule is not passing vacuously")
+    void theTotpRuleMatchesSomething() {
+        // An ArchUnit rule whose `that()` clause matches nothing passes. If the
+        // TOTP types were renamed away from the prefix, or the feature removed,
+        // every assertion above would go green while checking an empty set -
+        // which is the failure mode of a rule written against a naming
+        // convention.
+        long matched = CLASSES.stream()
+                .filter(type -> type.getSimpleName().startsWith("Totp")
+                        || type.getSimpleName().startsWith("UserTotp"))
+                .count();
+
+        assertThat(matched)
+                .as("No TOTP types were found at all, so the rule above checked nothing")
+                .isGreaterThanOrEqualTo(5L);
     }
 
     @Test

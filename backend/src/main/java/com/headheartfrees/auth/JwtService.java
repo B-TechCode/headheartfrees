@@ -33,12 +33,58 @@ import org.springframework.stereotype.Service;
  * claim. It carries no email and no display name: those change, tokens live 15
  * minutes past the change, and a stale name rendered in a UI is a bug that is
  * tedious to trace. {@code /me} is one query and always current.
+ *
+ * <h2>Every token says what kind of token it is</h2>
+ *
+ * From the TOTP phase this class mints three things with one key: an access
+ * token, and two short-lived tickets that represent a half-finished sign-in.
+ * All three are HS256 JWTs carrying a user id, so <strong>without a type claim
+ * they would be interchangeable</strong> - and a challenge ticket accepted as a
+ * Bearer token is the entire second factor bypassed with the ticket the server
+ * hands out for free after a password. That is the single worst bug this
+ * feature could ship, so {@link #TYPE_CLAIM} is mandatory on every token and
+ * {@link JwtAuthenticationFilter} refuses anything that is not
+ * {@link #TYPE_ACCESS}.
+ *
+ * <p>The alternative - a separate signing key per token type - is stronger in
+ * principle and was not taken: it is a second secret for the operator to
+ * generate, set and never lose, guarding against a mistake that one required
+ * claim and one filter check already prevent. {@code TotpTicketIsNotAnAccessTokenIT}
+ * is what keeps that true.
+ *
+ * <p><strong>Deploying this invalidates every access token already issued</strong>,
+ * because none of them carry the claim. That is fifteen minutes of clients
+ * silently refreshing, and it was verified in a browser rather than assumed -
+ * see the phase log.
  */
 @Service
 class JwtService {
 
     /** Private claim holding {@link UserRole#name()}. */
     static final String ROLE_CLAIM = "role";
+
+    /**
+     * Private claim naming what a token is for. Mandatory on all three kinds.
+     */
+    static final String TYPE_CLAIM = "typ";
+
+    /** A session token. The only kind {@link JwtAuthenticationFilter} accepts. */
+    static final String TYPE_ACCESS = "access";
+
+    /**
+     * Issued after a correct password on an enrolled account. Buys exactly one
+     * thing: the right to present a code at {@code POST /auth/login/totp}.
+     */
+    static final String TYPE_TOTP_CHALLENGE = "totp_challenge";
+
+    /**
+     * Issued after a correct password on an ADMIN account with no second factor
+     * yet. Buys exactly two things: {@code /auth/totp/setup} and
+     * {@code /auth/totp/enable}. It is what makes "required for admins"
+     * deployable without locking the existing admin out - the password still
+     * works, and it still reaches a screen with a QR code on it.
+     */
+    static final String TYPE_TOTP_ENROLMENT = "totp_enrolment";
 
     private static final String ISSUER = "headheartfrees";
     private static final MacAlgorithm ALGORITHM = MacAlgorithm.HS256;
@@ -94,10 +140,57 @@ class JwtService {
                 .expiresAt(now.plus(accessTokenTtl))
                 .subject(userId.toString())
                 .claim(ROLE_CLAIM, role.name())
+                .claim(TYPE_CLAIM, TYPE_ACCESS)
                 .build();
 
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(ALGORITHM).build(), claims))
                 .getTokenValue();
+    }
+
+    /**
+     * A ticket for a sign-in that has passed the password and is not finished.
+     *
+     * <p>Carries no role claim. It is not a session and nothing should be able
+     * to read an authority off it, so there is nothing there to read.
+     *
+     * @param type {@link #TYPE_TOTP_CHALLENGE} or {@link #TYPE_TOTP_ENROLMENT}
+     */
+    String issueTicket(UUID userId, String type, java.time.Duration ttl) {
+        Instant now = clock.instant();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(ISSUER)
+                .issuedAt(now)
+                .expiresAt(now.plus(ttl))
+                .subject(userId.toString())
+                .claim(TYPE_CLAIM, type)
+                .build();
+
+        return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(ALGORITHM).build(), claims))
+                .getTokenValue();
+    }
+
+    /**
+     * Verifies a ticket and returns whose it is.
+     *
+     * <p>{@code expectedType} is checked here rather than by the caller, so
+     * that "which kind of ticket is this?" cannot be forgotten at a call site.
+     * An expired, forged, or wrong-type ticket is one empty result: the caller
+     * answers identically to all three, and one that could tell them apart
+     * would be an oracle for which tickets had once been live.
+     */
+    java.util.Optional<UUID> verifyTicket(String token, String expectedType) {
+        if (token == null || token.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        return verify(token)
+                .filter(jwt -> expectedType.equals(jwt.getClaimAsString(TYPE_CLAIM)))
+                .flatMap(jwt -> {
+                    try {
+                        return java.util.Optional.of(UUID.fromString(jwt.getSubject()));
+                    } catch (IllegalArgumentException | NullPointerException malformed) {
+                        return java.util.Optional.empty();
+                    }
+                });
     }
 
     /**

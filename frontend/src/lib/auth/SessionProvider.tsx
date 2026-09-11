@@ -12,7 +12,13 @@ import {
 import type { ReactNode } from "react";
 import { ApiError, apiFetch, type ApiRequestOptions } from "@/lib/api";
 import { clearSessionHint, hasSessionHint, setSessionHint } from "./session-hint";
-import type { AccessTokenResponse, SessionStatus, UserSummary } from "./types";
+import type {
+  AccessTokenResponse,
+  LoginResponse,
+  SessionStatus,
+  SignInOutcome,
+  UserSummary,
+} from "./types";
 
 /**
  * The session, for the whole app.
@@ -86,8 +92,35 @@ import type { AccessTokenResponse, SessionStatus, UserSummary } from "./types";
 interface SessionContextValue {
   status: SessionStatus;
   user: UserSummary | null;
-  /** @throws {ApiError} on bad credentials, a weak-password rejection, or 429. */
-  signIn(email: string, password: string): Promise<void>;
+  /**
+   * Presents the password, and reports what it bought.
+   *
+   * **A resolved promise does not mean "signed in".** On an account that owes
+   * a second factor this resolves with a ticket and no session at all — no
+   * access token, no cookie, no user — and the caller must render the code
+   * step. Returning an outcome rather than resolving void is what makes that
+   * impossible to miss: there is nothing to read off a success here except the
+   * discriminator.
+   *
+   * @throws {ApiError} on bad credentials, a weak-password rejection, or 429.
+   */
+  signIn(email: string, password: string): Promise<SignInOutcome>;
+  /**
+   * Finishes a sign-in with a code from an authenticator, or a backup code.
+   *
+   * @throws {ApiError} 401 for every failure — wrong code, expired ticket,
+   *         replayed code, spent backup code — and 429 when the account's
+   *         second factor is locked.
+   */
+  completeSecondFactor(ticket: string, code: string): Promise<void>;
+  /**
+   * Adopts a session handed back by enrolment.
+   *
+   * Only `/auth/totp/enable` produces one: an admin who was sent to enrol
+   * instead of being signed in gets the session they came for in the same
+   * response as their backup codes.
+   */
+  adoptSession(session: AccessTokenResponse): void;
   /**
    * Ends the session on the server, then locally.
    *
@@ -356,12 +389,58 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [status]);
 
   const signIn = useCallback(
-    async (email: string, password: string) => {
-      const response = await apiFetch<AccessTokenResponse>("/api/v1/auth/login", {
+    async (email: string, password: string): Promise<SignInOutcome> => {
+      const response = await apiFetch<LoginResponse>("/api/v1/auth/login", {
         method: "POST",
         body: { email, password },
       });
-      adopt(response);
+
+      // Exhaustive over the union. Only the first branch adopts anything; the
+      // other two hold a ticket that the backend's JWT filter refuses as a
+      // Bearer token, so there is no way to get a session out of them here
+      // even by mistake.
+      switch (response.status) {
+        case "AUTHENTICATED":
+          adopt(response.session);
+          return { kind: "signed-in" };
+        case "TOTP_REQUIRED":
+          return { kind: "code-required", ticket: response.ticket };
+        case "TOTP_ENROLMENT_REQUIRED":
+          return { kind: "enrolment-required", ticket: response.ticket };
+      }
+    },
+    [adopt],
+  );
+
+  const completeSecondFactor = useCallback(
+    async (ticket: string, code: string) => {
+      // abortable: false. This is the call that spends the ticket and the
+      // code: if it is cut off after the server committed, the person is
+      // signed in on the server and looking at a form that says they are not,
+      // holding a code that is now spent and a ticket that is now used. They
+      // would have to start over, and the code they can see on their phone
+      // would not work until the digits rolled over.
+      const response = await apiFetch<LoginResponse>("/api/v1/auth/login/totp", {
+        method: "POST",
+        body: { ticket, code },
+        abortable: false,
+      });
+
+      if (response.status !== "AUTHENTICATED") {
+        // Unreachable against this backend - that endpoint either issues a
+        // session or throws. Failing loudly rather than silently doing nothing,
+        // because the alternative is a form that swallows the submit and looks
+        // frozen.
+        throw new Error("The server did not return a session after a valid code.");
+      }
+      adopt(response.session);
+    },
+    [adopt],
+  );
+
+  const adoptSession = useCallback(
+    (session: AccessTokenResponse) => {
+      adopt(session);
     },
     [adopt],
   );
@@ -421,8 +500,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<SessionContextValue>(
-    () => ({ status, user, signIn, signOut, authFetch, adoptSessionFromCookie }),
-    [status, user, signIn, signOut, authFetch, adoptSessionFromCookie],
+    () => ({
+      status,
+      user,
+      signIn,
+      completeSecondFactor,
+      adoptSession,
+      signOut,
+      authFetch,
+      adoptSessionFromCookie,
+    }),
+    [
+      status,
+      user,
+      signIn,
+      completeSecondFactor,
+      adoptSession,
+      signOut,
+      authFetch,
+      adoptSessionFromCookie,
+    ],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

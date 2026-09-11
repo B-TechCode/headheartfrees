@@ -136,7 +136,22 @@ class AuthResponseLeakageIT extends AuthTestSupport {
         // has to justify it.
         assertThat(UserSummary.class.getRecordComponents())
                 .extracting(java.lang.reflect.RecordComponent::getName)
-                .containsExactly("id", "email", "displayName", "role", "emailVerified", "createdAt");
+                // The three second-factor components are state ABOUT a
+                // credential and never the credential: no secret, no
+                // ciphertext, no code, no hash. They are here because the
+                // account page and the enrolment prompt cannot render without
+                // them, and a second endpoint to carry them would be a second
+                // thing to keep in step with this one.
+                .containsExactly(
+                        "id",
+                        "email",
+                        "displayName",
+                        "role",
+                        "emailVerified",
+                        "createdAt",
+                        "totpEnabled",
+                        "totpRequired",
+                        "backupCodesRemaining");
     }
 
     @Test

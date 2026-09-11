@@ -85,6 +85,29 @@ app:
     admin-bootstrap-emails: ${APP_ADMIN_BOOTSTRAP_EMAILS:}
     oauth2-success-redirect: ${APP_OAUTH2_SUCCESS_REDIRECT:http://localhost:3000/auth/callback}
 
+  # Two-step sign-in. Required for ADMIN, optional for everybody else.
+  totp:
+    # AES-256 over the stored TOTP secret. Development default, exactly as with
+    # jwt-secret above and for the same reason: a fresh clone and the test suite
+    # must work with no configuration. TotpEncryptionKeyGuard refuses this exact
+    # value unless the `local` profile is active, because a key committed to the
+    # repository plus a database dump is a permanent second factor for whoever
+    # has both.
+    #
+    # KEEP THE ONE YOU GENERATE. It cannot be regenerated, and losing it forces
+    # every enrolled account to re-enrol. See HANDOVER section 7.
+    encryption-key: ${APP_TOTP_ENCRYPTION_KEY:ZGV2ZWxvcG1lbnQtb25seS10b3RwLWtleS0wMTIzNDU=}
+    # The name an authenticator app files the entry under.
+    issuer: ${APP_TOTP_ISSUER:HeadHeartFreeS}
+    # How long the ticket from a correct password stays usable. It is a
+    # half-finished sign-in, not a session.
+    challenge-ttl: ${APP_TOTP_CHALLENGE_TTL:PT5M}
+    # 30-second steps accepted either side of now. One. See TotpService for why
+    # widening this multiplies the brute-force surface, and TotpProperties for
+    # the startup refusal above two.
+    drift-steps: ${APP_TOTP_DRIFT_STEPS:1}
+    backup-code-count: ${APP_TOTP_BACKUP_CODE_COUNT:10}
+
 # Swagger UI and the OpenAPI JSON are OFF by default, and are re-enabled only
 # by the `local` profile (application-local.yml).
 #

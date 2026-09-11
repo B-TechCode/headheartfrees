@@ -5229,3 +5229,620 @@ those words remained true. `/vent` should be opened in a real browser as part of
 verifying *any* change to headers, layout, providers or the root of the tree —
 not because it is fragile, but because it is the only page on this site that
 tells the truth about whether the client is alive.
+
+---
+
+# Post-phase-9 — TOTP as a second factor on admin sign-in
+
+The admin account is the only one that can read the moderation queue — every
+note a stranger submitted, published or not. It was protected by a password.
+Now it is protected by a password and a six-digit code.
+
+**The rule first, because it is the one that matters.** Nothing in this phase
+touches the vent path. `/vent` and `/vent/released` require no account, and
+`/api/v1/vent/**` takes no credential. `VentUnaffectedByTotpIT` is a second
+file alongside `VentRemainsAnonymousIT`, written against the specific things
+this phase introduced — an account that owes a factor, a ticket that looks like
+a token, a login endpoint that now sometimes refuses to issue a session — and it
+never authenticates successfully anywhere. The browser run releases a vent
+signed out, twice, at both ends of the flow.
+
+---
+
+## 1. Three things found before writing any code, and what each cost
+
+The instruction asked for proposals before implementation. Reading the existing
+auth module first turned up three problems that were not in the brief, and two
+of them would have made the feature decorative.
+
+### 1.1 Google sign-in never touches the login endpoint
+
+`GoogleSignInHandler.onAuthenticationSuccess` issues a refresh-token family and
+redirects the browser. It does not call `AuthService.login`. A second factor
+bolted onto `/api/v1/auth/login` alone would therefore have held for everyone
+except somebody who clicked the Google button — which is to say, it would have
+held for everyone not trying to avoid it.
+
+This is reachable rather than theoretical: `linkGoogle` attaches a Google
+identity to an existing password account on first Google sign-in, so an admin
+created the documented way (register, promote via `APP_ADMIN_BOOTSTRAP_EMAILS`)
+acquires a Google route the moment they use it once.
+
+Two ways to close it. **Rejected:** put a challenge ticket in the redirect URL.
+It works, and it puts a live credential into browser history and into every
+proxy log between here and the person — a real weakening next to the password
+path, where the ticket never leaves memory. **Taken, on the owner's decision:**
+refuse Google sign-in for ADMIN accounts outright.
+
+The refusal is not a dead end. It redirects to `/login?error=admin_password_required`,
+which renders a sentence saying admin accounts use a password and a code. It
+also writes nothing: the Google identity is not linked and no account is
+created, so the refusal is repeatable and reversible — remove the role and
+Google works again. `AdminGoogleSignInRefusedIT` covers all of it, including the
+case that matters most in practice: a user who signs in with Google, is *later*
+promoted, and must lose that route.
+
+Ordinary users are untouched.
+
+### 1.2 A refresh cookie outlives the requirement by thirty days
+
+`app.auth.refresh-token-ttl` is `P30D`. An admin signed in when this shipped
+holds a cookie minted before the requirement existed, and a refresh endpoint
+that simply rotated it would keep issuing admin access tokens for a month
+without a code ever being presented. "Required for admins" would have been true
+of new sign-ins and false of every session that already existed — which, on the
+day it ships, is the only session there is.
+
+So `DefaultAuthService.refresh` revokes the family and refuses when the account
+is ADMIN and owes a factor. One extra sign-in, once. It is placed *after*
+`rotate()` deliberately: rotation has already spent the presented token, so this
+cannot be worked around by presenting it again — that path is reuse detection,
+which revokes the family too.
+
+`AdminRefreshRequiresTotpIT` builds the exact sequence: a session obtained as an
+ordinary USER, the promotion applied afterwards, then a refresh. It also asserts
+the revocation is *conditional* — an enrolled admin refreshes normally, or they
+would be signed out every fifteen minutes forever.
+
+### 1.3 Access tokens carried no token-type claim
+
+This is the one that would have made the whole feature a no-op, and it is worth
+stating plainly because the failure is invisible.
+
+`JwtService` now signs three things with one key: an access token, a challenge
+ticket, and an enrolment ticket. All three are HS256 JWTs, same issuer, user id
+in `sub`. Without something separating them they are **interchangeable** — and a
+challenge ticket accepted as a Bearer token means the second factor is bypassed
+using the ticket the server hands out, for free, immediately after a correct
+password.
+
+The feature would have looked entirely correct from outside. `/login` would have
+refused to issue a session. Every test about codes would have passed. And the
+moderation queue would have opened to anybody who read the ticket out of the
+first response.
+
+The fix is one mandatory `typ` claim and one `filter` in
+`JwtAuthenticationFilter`. `TotpTicketIsNotAnAccessTokenIT` presents each ticket
+type as a Bearer token, plus a token with no claim at all and one with an
+unrecognised claim, and asserts refusal — with a control that a real access
+token still works, so the class cannot pass against a filter that rejects
+everything.
+
+**A separate signing key per token type was considered and not taken.** It is
+stronger in principle and it is a second secret for the operator to generate,
+set and never lose, guarding against a mistake that one required claim and one
+filter check already prevent.
+
+---
+
+## 2. The decisions, and what was rejected
+
+### Who it applies to
+
+**Required for ADMIN, optional for USER.** A USER account grants the ability to
+put a display name on a note that a human then moderates. The admin account
+grants the queue. Forcing enrolment on somebody who signed up to leave one
+piece of feedback is friction with no corresponding benefit.
+
+`TotpService.isRequiredFor` is the single source of that policy. `UserAccount.toSummary`
+calls it rather than testing the role itself, so there is one place to change
+and not two.
+
+### The enrolment gap
+
+**Forced enrolment at sign-in. No grace period.**
+
+A correct password on an ADMIN account with no second factor returns an
+*enrolment ticket*, not a session. That ticket authorises exactly two calls —
+`/auth/totp/setup` and `/auth/totp/enable` — and enabling returns the session
+they came for, so enrolling and signing in are one step.
+
+Why not a grace period: a grace period is a window in which the protection does
+not exist, and it ends on a date nobody is watching. The lockout it is meant to
+prevent still happens, just later and by surprise. Why not "issue the session,
+then nag": that is precisely the thing the phase exists to prevent.
+
+Verified against a real deploy, not reasoned about — see §6.
+
+### Recovery
+
+**Ten codes, ten characters each, shown once, Argon2id-hashed.**
+
+The alphabet is Crockford-style with `I`, `L`, `O`, `U`, `0` and `1` removed —
+those are the characters people transcribe wrongly, and a backup code is read at
+the worst possible moment.
+
+Argon2id rather than the SHA-256 used for `refresh_tokens.token_hash`. The
+argument that justifies a bare digest there — 256 bits from `SecureRandom`, so
+there is no dictionary — does not survive the drop to ~50 bits, where SHA-256 is
+days of GPU work against a leaked table. A deterministic lookup is not needed
+either: the user id is always known when a code is verified, so the ten rows are
+fetched and compared one at a time. That linear scan is affordable *because* the
+lockout ladder caps how often it can happen.
+
+Consumed rows are marked, not deleted, so "how many are left" is answerable
+honestly on `/account` — and the count is surfaced there with a warning below
+three, because otherwise somebody who has spent eight of ten has no signal at
+all until the day it matters.
+
+Regeneration is gated on a current code and replaces all ten. Old rows are
+deleted rather than marked, so the sheet somebody just threw away is not still
+a way in.
+
+### Storage, and the honest answer
+
+Two tables, `user_totp` and `user_totp_backup_code`, rather than columns on
+`users`. `users` is read on every `/me` and every refresh and has no business
+carrying a credential through those reads; a missing row is an unambiguous "not
+enrolled" where nullable columns would be three states pretending to be two; and
+the recovery procedure becomes a `DELETE` against a table with one purpose
+rather than an `UPDATE` whose `WHERE` could damage the account it is meant to
+rescue.
+
+**The secret is encrypted at rest with AES-256-GCM**, keyed by
+`APP_TOTP_ENCRYPTION_KEY`, with the owner's UUID as additional authenticated
+data so a ciphertext cannot be moved between rows. Guarded at startup exactly as
+`JwtSecretGuard` guards the JWT secret.
+
+What that buys, stated the way it is stated in `TotpSecretCipher` and in
+HANDOVER §7:
+
+- It **does** separate "somebody holds the database" from "somebody holds the
+  database *and* the application's environment". A dump, a stolen backup, a read
+  replica, a cloud console, SQL injection — all yield ciphertext.
+- It **does not** protect against anybody who has the running application. Root
+  on the box, or read access to its environment, decrypts every row. The key and
+  the data are in the same place at runtime, necessarily, because the
+  application has to verify a code.
+
+Without it, the honest sentence would be: *a base32 string in `user_totp` is a
+permanent second factor for whoever reads it, and a database backup in the wrong
+bucket is a complete bypass.* Confirmed in the running system: the column holds
+`v1:`-prefixed ciphertext, checked by `psql` against a live enrolment.
+
+The cost is a second unrecoverable secret, and it is documented as one.
+
+### Rate limiting, and why the IP limit is the weaker half
+
+A new `RateLimitPolicy.TOTP` at 10/min reuses `ClientIpRateLimiter` as
+instructed — its own bucket, not `AUTH`, following the reasoning already in that
+enum: somebody fumbling a six-digit code must not lose the allowance that lets
+them sign in at all.
+
+**But per-IP limiting is close to worthless here** and the code says so.
+HANDOVER §10.3 records that behind Docker every visitor shares one bucket, which
+makes it either evadable from a second address or a nuisance to everyone. The
+limit that holds is per account, on the `user_totp` row.
+
+Five consecutive failures lock the second factor for 15 minutes; the next five
+for 30; then 60; then 24 hours. **The counter is not reset when a lock expires**
+— only by a success. That one line is the whole defence:
+
+| | guesses/day | even odds of a hit |
+|---|---|---|
+| Reset on expiry | 480 | ~1 year |
+| Compounding (built) | 5 | ~180 years |
+
+Six digits with a ±1 window means three live codes, so a guess lands with
+probability 3×10⁻⁶. A flat "five per fifteen minutes" sounds strict and is a
+speed bump. `UserTotpLockoutTest` walks the ladder with time as an argument,
+because the property is about hours and cannot be observed through MockMvc
+without sleeping.
+
+**The lock is not a usable denial of service**, and this is load-bearing: the
+counter is only reachable after a correct password, because that is the only
+thing that produces a challenge ticket. Anybody who can lock the admin out for a
+day already knows the admin's password. Somebody who knows only the email
+address cannot reach it at all.
+
+### Replay
+
+`last_used_step` on the row, and a code is refused when its step is **≤** the
+last accepted one.
+
+Stricter than "the same code cannot be used twice", deliberately, and this is
+what RFC 6238 §5.2 recommends. It closes the actual attack, which is not reuse
+of the code you just watched somebody type — it is replay of the code from the
+step *before*, still live because of the drift window. A shoulder-surfer's
+window is 90 seconds, not 30.
+
+`TotpSignInIT.anOlderCodeInsideTheWindowIsRefused` tests exactly that: a
+never-presented code from the previous step, which the drift window accepts and
+which only the spent-step rule can refuse, with a control proving the next step
+still works.
+
+### Clock drift
+
+**±1 step. 90 seconds total, three live codes.** RFC 6238 §5.2 says at most one,
+and the reason is arithmetic — each extra step is two more live codes. ±2 would
+be a 67% larger target in exchange for tolerating a phone a full minute out,
+which fails against every other TOTP site too and whose real fix is its own
+clock settings. `TotpProperties` refuses to start above 2 rather than letting a
+misconfiguration be discovered in a log nobody reads.
+
+The replay rule pulls the same way: a wider window is a longer
+capture-and-replay opportunity.
+
+### The library
+
+**`com.eatthepath:java-otp:1.0.0`.** MIT, released 2026-08-18, ~20KB, and
+**zero compile or runtime dependencies** — every `<dependency>` in its published
+POM is test scope. It does one thing: derive a code from a key and an instant
+over `javax.crypto.Mac`.
+
+Rejected: `dev.samstevens.totp` — last released November 2020, and pulls zxing
+plus commons-codec behind it. `com.atlassian:onetime` — maintained, but Kotlin,
+so `kotlin-stdlib` enters a Java-only runtime image for one algorithm.
+
+Two things the library does not do:
+
+**Base32** is written here, ~25 lines, against the RFC 4648 §10 test vectors.
+The algorithm is never reimplemented — `java-otp` takes a `SecretKey` built from
+raw bytes and base32 is needed only for the string a person types and the
+`otpauth://` URI. It is an alphabet substitution with no secret and no timing
+sensitivity, and it fails loudly: a wrong table or bit order produces a secret
+whose codes never match, caught by the first scan. That is a different class of
+risk from getting a truncation offset quietly wrong.
+
+**QR encoding** is `io.nayuki:qrcodegen:1.8.0`. Its last release is April 2022
+and **that is not rot.** QR is a frozen ISO specification (ISO/IEC 18004) and
+this is a complete implementation of it with no dependencies and no upstream
+moving underneath it. There is nothing to track. Judge it on whether it still
+encodes the spec — it does — rather than on the date. This paragraph exists so
+nobody later flags the date as neglect and swaps it for something worse.
+
+It sits on the backend rather than the frontend for two reasons: the frontend
+has zero runtime dependencies today and that is worth keeping, and the
+production CSP is `style-src 'self'` with no `'unsafe-inline'`, which a
+client-side QR component is one inline style away from breaking. The server
+returns an SVG `data:` URI, which the existing `img-src 'self' data:` already
+covers, so no policy changed. Rendering into `<img>` also means the SVG never
+becomes live DOM and there is no `dangerouslySetInnerHTML` anywhere in this
+feature.
+
+---
+
+## 3. Two bugs the tests found, and neither was in the test
+
+### 3.1 The attempt limiter was decorative
+
+`TotpAttemptLimitIT.theSequenceStops` expected a 429 on the sixth attempt and
+got a sixth 401. `aCorrectCodeIsRefusedWhileLocked` got a *successful sign-in*.
+
+Every failure path records something and then throws: `failAndThrow` increments
+the counter, sets the lock, saves, and raises `InvalidTotpCodeException`. Under
+the default rollback rules **that throw undoes the save in the same
+transaction**. The caller got a 401, the counter went back to zero, and the
+limit counted to five forever without arriving.
+
+Six digits behind a limit that does not count is a million guesses at whatever
+rate the network allows.
+
+This is the identical trap `RefreshTokenService.rotate` already documents for
+reuse detection, in the same module, with a comment explaining it. It was read
+during this phase and the lesson still had to be relearned from a red test. The
+fix is `noRollbackFor` on three methods in `TotpService` and four in
+`DefaultAuthService` — both layers, because with `REQUIRED` propagation they
+share one physical transaction and either marking it rollback-only loses the
+write.
+
+**An existing comment warning about a trap does not prevent the trap.** The
+thing that caught it was a test that asserted the *sixth* attempt behaves
+differently from the fifth. A test that only checked "a wrong code is refused"
+would have passed against a limiter that never limited.
+
+### 3.2 `maxLength={6}` ate a digit out of every pasted code
+
+`CodeInput` had `maxLength={6}` and an `onChange` that strips non-digits. Paste
+`123 456` — seven characters, and how most authenticators and password managers
+render a code — and the browser clips the **raw** value to `123 45` before the
+filter runs. Result: `12345`, a disabled button, and nothing on screen
+explaining why.
+
+Caught by a unit test that pasted rather than typed. Typing never reproduces it.
+The cap now lives in `sanitiseCode`, applied *after* separators are removed, and
+a comment says why `maxLength` must not come back.
+
+---
+
+## 4. What was built
+
+**Backend** — all inside `com.headheartfrees.auth`, so the existing module
+boundary rules cover it with no edit. `ModuleBoundaryArchitectureTest` gains a
+rule asserting no TOTP type may exist outside `auth` (bar the two configuration
+bindings), plus a check that the rule is not passing vacuously against a renamed
+set.
+
+```
+POST /auth/login          → AUTHENTICATED + session
+                          → TOTP_REQUIRED + ticket, no session, no cookie
+                          → TOTP_ENROLMENT_REQUIRED + ticket
+POST /auth/login/totp     {ticket, code}   → session
+POST /auth/totp/setup     session or ticket → {manualKey, otpauthUri, qrDataUri}
+POST /auth/totp/enable    {code}            → {backupCodes[10], session?}
+POST /auth/totp/backup-codes {code}         → {backupCodes[10]}
+POST /auth/totp/disable   {password, code}  → 204   (refused for ADMIN)
+GET  /auth/me                               + totpEnabled, totpRequired, backupCodesRemaining
+```
+
+`LoginOutcome` is a sealed interface and `AuthController` switches over it
+exhaustively, so a fourth outcome cannot be added without the switch failing to
+compile. Neither challenge case carries a session, a user, or an access token —
+the fields are absent, not null.
+
+The three public paths (`/login/totp`, `/totp/setup`, `/totp/enable`) are
+`permitAll` because the caller legitimately has no session yet. They are not
+unauthenticated: each demands a ticket issued only after a correct password,
+five-minute life, refused as a Bearer token.
+
+Disabling requires the password **and** a code. The threat is somebody else
+holding the session — and a session is exactly what they have; without the
+password, turning off the factor would be the one move a hijacked session could
+make to render itself permanent. It also revokes every session on every device.
+
+**Error copy.** One message for every failure of the code step — wrong code,
+expired ticket, forged ticket, replayed code, unknown backup code, spent backup
+code, account not enrolled. `TotpSignInIT.aBadTicketIsIndistinguishableFromABadCode`
+asserts the responses are byte-identical but for the timestamp.
+
+The one deliberate exception is the lock: 429 with `Retry-After`. It discloses
+nothing — anybody seeing it already passed the password check — and an admin
+whose correct code is silently refused, with no indication of when that stops,
+has no way to tell a lockout from a broken authenticator and will keep trying,
+which extends the lock.
+
+**Frontend** — still zero runtime dependencies. The code step is a state change
+on `/login`, not a route: a `/login/code` route would have to carry the ticket
+in a query string (browser history, proxy logs) or in storage (survives the
+tab). Held in a `useState`, a reload loses it, and losing it is correct — the
+person re-enters a password they know.
+
+One labelled input, not six boxes. Six boxes need a label per box or none at
+all, fight `one-time-code` autofill, break paste, and steal focus. `inputMode="numeric"`,
+`autoComplete="one-time-code"`, and a filter that makes any paste land as six
+digits.
+
+`alt=""` on the QR, deliberately: it is a picture of the string printed beside
+it, and an alt of "QR code" announces a dead end. The manual key is not a
+fallback — it is the same secret, as selectable text.
+
+---
+
+## 5. Tests
+
+Backend **93 unit + 166 integration, all passing**. Frontend **107 across 18
+files**, lint and typecheck clean.
+
+Every item the instruction listed, and where it lives:
+
+| Requirement | Test |
+|---|---|
+| Correct password, no code → no session | `TotpSignInIT.correctPasswordAloneIssuesNoSession` |
+| Correct password, wrong code → no session | `TotpSignInIT.wrongCodeIssuesNoSession` |
+| Correct password, correct code → succeeds | `TotpSignInIT.correctCodeSucceeds` |
+| The same code cannot be used twice | `TotpSignInIT.aCodeCannotBeReplayed` |
+| Attempts are limited, and the limit stops the sequence | `TotpAttemptLimitIT` (5 tests) |
+| Backup codes work once each, then do not | `TotpBackupCodeIT` (5 tests) |
+| Enabling requires a verified code first | `TotpEnrolmentIT.enablingRequiresAVerifiedCode` |
+| A USER without TOTP signs in normally | `TotpSignInIT.ordinaryUserIsUntouched` |
+| **`/api/v1/vent/**` works with no credentials** | **`VentUnaffectedByTotpIT` (7 tests)** |
+
+The first assertion in `TotpSignInIT` checks an *absence* three ways — the
+status, the missing body fields, and the missing `Set-Cookie` — because an
+absence is easy to break by accident and easy to miss in review.
+
+**A test-fixture note worth reading before the next change.** Enrolment verifies
+a code, and a verified code spends its step. A sign-in in the next thirty
+seconds derives the *same* step and is correctly refused. `TotpTestSupport.signInCodeFor`
+takes the next step's code, and where a test needs two operations it signs in
+with a backup code (which spends no step) rather than a TOTP code. This is real
+behaviour, not a test artefact — somebody who enrols and immediately signs in on
+a second device waits for the digits to roll over — and it is written down so
+the next person does not read it as a bug.
+
+---
+
+## 6. Verified in a browser, against the real stack
+
+`docker compose up --build`, Chromium via Playwright, production CSP enforced.
+Playwright was installed in a scratch directory, not into the project: nothing
+was added to `package.json`.
+
+**On authenticator apps.** No phone was involved. Codes came from two
+independent RFC 6238 implementations that share no code with `java-otp` —
+`pyotp` 2.10.0 for the API-level run, and a twelve-line implementation written
+against the spec for the browser run — cross-checked against each other on a
+fixed secret to make sure agreement was not two identical mistakes. That
+exercises the same path an authenticator app takes: decode the published
+`manualKey`, derive a code, present it. **It is not the same as scanning the QR
+with Google Authenticator on a handset, and that remains unverified** — see §8.
+
+### API-level, 35 checks
+
+Register → sign in → enrol → enable → sign in with a code → replay refused →
+backup codes → limit → `/vent`. All passed. The lockout sequence came out as
+`[401, 401, 401, 401, 401, 429, 429]` — the sixth attempt, exactly as designed.
+
+### The deploy-day scenario, run as a deploy
+
+Not simulated. An account was registered, signed in as an ordinary USER (holding
+a real refresh cookie), then promoted by restarting the backend with
+`APP_ADMIN_BOOTSTRAP_EMAILS` set — the documented sequence from HANDOVER §6, and
+the exact thing that happens on deploy:
+
+```
+AdminBootstrap : Promoted account bed19adb-… to ADMIN via APP_ADMIN_BOOTSTRAP_EMAILS
+DefaultAuthService : Account bed19adb-… must enrol a second factor before signing in
+DefaultAuthService : Revoking sessions for admin account bed19adb-…: it holds no
+                     second factor, so this refresh family predates the
+                     requirement and must not outlive it
+```
+
+The pre-promotion cookie was refused, and refused again — revoked, not merely
+declined once. The password still reached a setup screen. Enrolling issued the
+session and the moderation queue opened.
+
+### Browser, 32 checks
+
+`/vent` first and last. The vent counter is asserted to track typing, because
+the phase 9 addendum records 92 component tests passing against a build where
+nothing mounted — a textarea holds text on its own, and only React state proves
+the client booted.
+
+Enrolment from `/account`: QR painted from a `data:` URI under the production
+CSP (measured bounding box, not just a `src` attribute), manual key selectable,
+a code typed *with a space in it* landing as six digits, ten backup codes shown
+once. Sign-in in two steps, a wrong code showing the API's own sentence and
+clearing the field, then a correct one. Cookie attributes checked on the wire:
+`httpOnly`, `SameSite=Strict`, `Path=/api/v1/auth` — the last is what keeps it
+off `/vent`. A backup code signing in and the count dropping to 9. The admin
+enrolment screen mid-sign-in with no session cookie, and the backup codes
+staying on screen rather than being swept away by a redirect.
+
+Zero CSP violations, zero uncaught page errors.
+
+### The open tab across a deploy — and the first attempt at it proved nothing
+
+The instruction was to verify, not assert, that adding `typ` costs an open tab
+nothing visible.
+
+**The first attempt was wrong and is recorded because the mistake is easy to
+repeat.** It signed in, closed the browser, restarted the backend, reopened the
+profile — and everything passed with *no 401 ever happening*. A fresh page load
+starts with an empty in-memory access token, sees the session-hint cookie, and
+refreshes on mount. It demonstrated the ordinary page-load path, not the one
+under test. A green result that exercises the wrong code path is worse than a
+red one.
+
+The second attempt never reloads the page: one process, one tab, signed in,
+backend restarted from inside the run, then a single ordinary click. The
+network from that one click:
+
+```
+401 /auth/totp/setup      ← the token the tab was holding
+200 /auth/refresh         ← SessionProvider, unprompted
+200 /auth/totp/setup      ← the retry
+```
+
+The setup screen appeared, under ten seconds, nothing on screen mentioning an
+error or a sign-out, no redirect to `/login`, no uncaught errors. **9 of 9
+passed.**
+
+**What stands in for the old build, stated plainly.** The previous backend could
+not be rebuilt — this phase forbids git commands, so the old tree cannot be
+checked out. Instead the backend was restarted with a different
+`APP_JWT_SECRET`, which makes every previously-minted access token unverifiable
+while leaving refresh tokens — random strings hashed in the database, not JWTs —
+completely valid. That is the same state the `typ` claim creates. The mechanism
+under test, 401 → refresh → retry in an already-open tab, is the real thing; the
+cause of the 401 is a stand-in.
+
+### The recovery SQL was run, not just written
+
+The procedure in HANDOVER §6 was executed against a live enrolled admin:
+`DELETE 1`, `DELETE 10`, `UPDATE 3`. The next sign-in returned
+`TOTP_ENROLMENT_REQUIRED` with no session and **no restart**, which is what the
+documentation claims. Documented SQL that has never been run is a guess.
+
+---
+
+## 7. Documentation
+
+HANDOVER gains: what two-step sign-in means for the admin and what the first
+sign-in after deploy looks like; that Google is refused on admin accounts and
+why; where backup codes come from and that they are shown once; the lockout
+recovery procedure as literal, tested SQL; and a "two secrets you must not lose"
+section carrying the honest account of what encryption at rest does and does not
+buy.
+
+§4 gains the line the instruction asked for: **removing the developer's address
+from `APP_ADMIN_BOOTSTRAP_EMAILS` is a separate act from adding the owner's.**
+The variable is a list. An address left in it is re-promoted on every restart,
+and removing it does not demote an account that is already ADMIN — so the SQL
+and the verifying `SELECT` are there too, with the instruction to restart and
+run the SELECT again.
+
+`.env.example` and `docker-compose.yml` gained the five `APP_TOTP_*` variables.
+`APP_TOTP_ENCRYPTION_KEY` takes the null form in compose for the same reason
+`APP_JWT_SECRET` does: an empty string is a *set* property to Spring and would
+override the default, breaking a fresh clone. `EnvExampleComposeDriftTest`
+passes.
+
+---
+
+## 8. NOT verified
+
+- **No real authenticator app on a real phone.** Codes came from two
+  independent RFC 6238 implementations, cross-checked. The QR was rendered and
+  measured in a browser but **never photographed by a handset camera**. What
+  that leaves open is narrow and real: the `otpauth://` URI's label and
+  parameters are built to the de-facto Key Uri Format and were not confirmed
+  against how any particular app files an entry. Scan it once with Google
+  Authenticator before handover.
+- **No iOS or Android browser.** The code field's `inputMode="numeric"` and
+  `autoComplete="one-time-code"` are exactly the attributes those platforms read
+  to offer a code from a notification, and neither was observed doing it.
+- **The 24-hour end of the lockout ladder was never waited out.** The ladder is
+  unit-tested with time as an argument; nothing sat through a real one.
+- **No screen reader.** The QR's `alt=""` and the manual key beside it are
+  reasoned about, not heard. Same limitation as HANDOVER §10.6.
+- **Argon2id over ten backup codes was not load-tested.** A verification is up
+  to ten hashes at ~19 MiB each; bounded by the lockout ladder, and never
+  measured under concurrency.
+- **No Google round trip.** The admin refusal is covered by driving
+  `GoogleSignInHandler` directly with a stubbed `OAuth2User`, because the thing
+  under test is the decision it makes after Google has said yes. The real flow
+  needs the owner's credentials — HANDOVER §3.4 already carries that.
+- **Rate limiting is still per-instance and in-memory** (HANDOVER §10.3). The
+  per-account lock is in the database and does not share that weakness, which is
+  the reason it is the half that matters.
+
+---
+
+## 9. What this says
+
+**Read the module before proposing the design.** The three findings in §1 cost
+about an hour of reading and two of them were the difference between a control
+and the appearance of one. None would have been found by reading the
+instruction, and the Google path in particular would have shipped looking
+perfect.
+
+**A comment warning about a trap does not prevent the trap.** `noRollbackFor` is
+documented at length in this very module, was read during this phase, and the
+attempt limiter was still written without it. What caught it was a test
+asserting the sixth attempt differs from the fifth. Write the test that
+distinguishes "counted" from "counting".
+
+**Green can mean the wrong code path ran.** The first open-tab check passed with
+no 401 in it. Assert that the thing you are recovering from actually happened —
+both browser scripts now check for the 401 they depend on, and the
+ArchUnit rule checks it matched something.
+
+**Absences need more than one assertion.** "No session" is the entire feature,
+and it is checked as a status, a missing body field, and a missing `Set-Cookie`
+— because any one of those could come back on its own.
+
+**Say which half of a security property you have.** Encryption at rest here
+separates a database compromise from a full compromise, and nothing more. Saying
+"the secret is encrypted" and stopping would leave the next person believing
+something untrue at the moment it matters.

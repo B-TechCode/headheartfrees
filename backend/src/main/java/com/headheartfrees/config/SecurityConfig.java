@@ -65,6 +65,19 @@ public class SecurityConfig {
         "/api/v1/auth/login",
         "/api/v1/auth/refresh",
         "/api/v1/auth/logout",
+        // The second half of a sign-in, and the enrolment an admin is sent to
+        // instead of a session. Public because the caller legitimately has no
+        // session yet - that is what a challenge is.
+        //
+        // NOT unauthenticated. Each demands a ticket that is issued only after
+        // a correct password, lives five minutes, and is refused by
+        // JwtAuthenticationFilter if presented as a Bearer token
+        // (TotpTicketIsNotAnAccessTokenIT). /totp/backup-codes and
+        // /totp/disable are deliberately absent: they act on an account that
+        // is already signed in, so they fall to anyRequest().authenticated().
+        "/api/v1/auth/login/totp",
+        "/api/v1/auth/totp/setup",
+        "/api/v1/auth/totp/enable",
         // Google sign-in entry and callback.
         "/oauth2/**",
         "/login/oauth2/**",

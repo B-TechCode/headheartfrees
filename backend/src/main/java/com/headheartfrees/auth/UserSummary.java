@@ -15,6 +15,20 @@ import java.util.UUID;
  *
  * <p>{@code googleId} is absent too. It is an identifier for a third-party
  * account and the client has no use for it.
+ *
+ * <h2>The three second-factor fields</h2>
+ *
+ * {@code totpEnabled}, {@code totpRequired} and {@code backupCodesRemaining}
+ * are state <em>about</em> a credential and never the credential: no secret, no
+ * ciphertext, no code, no hash. They are here because the client cannot render
+ * the account page or the enrolment prompt without them, and the alternative -
+ * a second endpoint - would be a second thing to keep in step with this one.
+ *
+ * <p>{@code backupCodesRemaining} is a count, and a count is the honest way to
+ * answer "how many do I have left?" for somebody who cannot be shown the codes
+ * again. It tells an attacker who has already taken over a session how much
+ * recovery material exists, which is not a secret worth protecting from
+ * somebody who is already inside the account.
  */
 public record UserSummary(
         UUID id,
@@ -22,5 +36,8 @@ public record UserSummary(
         String displayName,
         UserRole role,
         boolean emailVerified,
-        Instant createdAt) {
+        Instant createdAt,
+        boolean totpEnabled,
+        boolean totpRequired,
+        long backupCodesRemaining) {
 }

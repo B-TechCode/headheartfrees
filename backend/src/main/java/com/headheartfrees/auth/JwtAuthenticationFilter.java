@@ -35,8 +35,24 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * change or a deletion takes up to the access-token TTL to take effect;
  * fifteen minutes is the deliberate bound on that staleness.
  *
- * <p>An invalid or expired token is treated as <em>no</em> token rather than as
- * an error: the context is left anonymous and the filter chain decides what
+ * <h2>Only an access token authenticates</h2>
+ *
+ * This class mints nothing, but {@link JwtService} signs three kinds of token
+ * with one key: the access token, and two short-lived tickets representing a
+ * half-finished sign-in. All three are HS256 JWTs carrying a user id in
+ * {@code sub}, so the only thing separating them is
+ * {@link JwtService#TYPE_CLAIM} - and this filter is where that separation is
+ * enforced. A challenge ticket accepted here as a Bearer token would be the
+ * second factor bypassed using the ticket the server hands out, for free,
+ * immediately after a password. {@code TotpTicketIsNotAnAccessTokenIT} presents
+ * each ticket type here and asserts it is refused.
+ *
+ * <p>A token with no type claim at all is refused too. Every access token
+ * issued before that claim existed therefore stops working on deploy, which is
+ * one silent refresh per open client and is the correct direction to fail.
+ *
+ * <p>An invalid, expired, or wrong-type token is treated as <em>no</em> token
+ * rather than as an error: the context is left anonymous and the filter chain decides what
  * that means for the path being requested. That is what keeps
  * {@code /api/v1/vent/**} reachable when a client sends a stale token - the
  * request is simply anonymous, and the vent endpoints are public.
@@ -67,6 +83,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (SecurityContextHolder.getContext().getAuthentication() == null) {
             extractToken(request)
                     .flatMap(jwtService::verify)
+                    // The type check, and the reason it is here rather than in
+                    // toAuthentication: this is the one place every Bearer
+                    // token in the application passes through, so a ticket that
+                    // gets past this line is a ticket that authenticates.
+                    .filter(jwt -> JwtService.TYPE_ACCESS.equals(
+                            jwt.getClaimAsString(JwtService.TYPE_CLAIM)))
                     .flatMap(jwt -> toAuthentication(jwt, request))
                     .ifPresent(SecurityContextHolder.getContext()::setAuthentication);
         }

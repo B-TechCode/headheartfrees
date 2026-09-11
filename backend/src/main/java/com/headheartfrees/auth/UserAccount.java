@@ -159,7 +159,29 @@ class UserAccount {
         this.role = newRole;
     }
 
-    UserSummary toSummary() {
-        return new UserSummary(id, email, displayName, role, emailVerified, createdAt);
+    /**
+     * @param totpEnabled           whether a confirmed second factor exists
+     * @param backupCodesRemaining  unused recovery codes
+     *
+     * <p>The second-factor state is passed in rather than read here. This
+     * entity deliberately knows nothing about {@code user_totp}: a JPA
+     * association would drag a credential into every {@code /me} and every
+     * refresh, and the two tables are separate for exactly that reason.
+     */
+    UserSummary toSummary(boolean totpEnabled, long backupCodesRemaining) {
+        return new UserSummary(
+                id,
+                email,
+                displayName,
+                role,
+                emailVerified,
+                createdAt,
+                totpEnabled,
+                // One source of truth for "who must hold a second factor".
+                // Inlining `role == ADMIN` here would be a second place to
+                // update the day that policy changes, and the kind of second
+                // place nobody finds.
+                TotpService.isRequiredFor(role),
+                backupCodesRemaining);
     }
 }

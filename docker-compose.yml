@@ -51,6 +51,17 @@ services:
       APP_JWT_REFRESH_TOKEN_TTL: ${APP_JWT_REFRESH_TOKEN_TTL:-P30D}
       APP_COOKIE_SECURE: ${APP_COOKIE_SECURE:-true}
       APP_ADMIN_BOOTSTRAP_EMAILS: ${APP_ADMIN_BOOTSTRAP_EMAILS:-}
+      # Two-step sign-in. APP_TOTP_ENCRYPTION_KEY takes the null form for the
+      # same reason APP_JWT_SECRET does above: an empty string is a SET property
+      # to Spring, so `${...:-}` would override application.yml's default and
+      # the app would refuse to start with "encryption-key is not set" on a
+      # fresh clone. The null form passes a value through when there is one and
+      # leaves the variable absent when there is not.
+      APP_TOTP_ENCRYPTION_KEY:
+      APP_TOTP_ISSUER: ${APP_TOTP_ISSUER:-HeadHeartFreeS}
+      APP_TOTP_CHALLENGE_TTL: ${APP_TOTP_CHALLENGE_TTL:-PT5M}
+      APP_TOTP_DRIFT_STEPS: ${APP_TOTP_DRIFT_STEPS:-1}
+      APP_TOTP_BACKUP_CODE_COUNT: ${APP_TOTP_BACKUP_CODE_COUNT:-10}
       # Both must default to empty. Google is optional: blank means the
       # registration is never created and the app starts with password login
       # only, which is the state OAuth2AbsentConfigIT pins.

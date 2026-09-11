@@ -127,6 +127,22 @@ class RefreshTokenService {
         stored.ifPresent(token -> repository.revokeFamily(token.getFamilyId(), clock.instant()));
     }
 
+    /**
+     * Revokes every live token for one account, across every family.
+     *
+     * <p>Used when the account's standing changed rather than when one session
+     * misbehaved: an ADMIN still owing a second factor, or an account that has
+     * just disabled one. Both are reasons to end every session, including the
+     * ones on devices that are not making this request.
+     */
+    @Transactional
+    void revokeAllFor(UUID userId) {
+        int revoked = repository.revokeAllForUser(userId, clock.instant());
+        if (revoked > 0) {
+            log.info("Revoked {} live refresh tokens for account {}", revoked, userId);
+        }
+    }
+
     private IssuedToken issue(UUID userId, UUID familyId) {
         Instant now = clock.instant();
         byte[] raw = new byte[TOKEN_BYTES];

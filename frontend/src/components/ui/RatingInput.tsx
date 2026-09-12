@@ -80,7 +80,7 @@ export function RatingInput({
             className={cn(
               "group relative inline-flex h-11 w-11 cursor-pointer items-center justify-center",
               "rounded-md transition-colors duration-150 ease-out",
-              "hover:bg-clay-wash",
+              "hover:bg-accent-wash",
             )}
           >
             {/*
@@ -143,7 +143,7 @@ function Star({ filled, className }: { filled: boolean; className?: string }) {
       viewBox="0 0 24 24"
       aria-hidden="true"
       focusable="false"
-      className={cn(className, filled ? "text-clay" : "text-ink-faint")}
+      className={cn(className, filled ? "text-accent" : "text-ink-faint")}
       fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
       strokeWidth={filled ? 1 : 1.5}

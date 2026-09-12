@@ -149,7 +149,7 @@ export default function SupportPage() {
               className={cn(
                 "mt-5 inline-flex min-h-11 items-center rounded-sm text-body",
                 "text-(--color-text-accent) underline decoration-ink-faint underline-offset-4",
-                "transition-colors duration-150 ease-out hover:decoration-clay",
+                "transition-colors duration-150 ease-out hover:decoration-accent",
                 focusRing,
               )}
             >
@@ -169,7 +169,7 @@ export default function SupportPage() {
           href="/vent"
           className={cn(
             "mt-4 inline-flex min-h-11 items-center rounded-sm text-body-lg",
-            "text-(--color-text-accent) underline decoration-clay underline-offset-4",
+            "text-(--color-text-accent) underline decoration-accent underline-offset-4",
             "transition-colors duration-150 ease-out hover:text-ink hover:decoration-ink-faint",
             focusRing,
           )}

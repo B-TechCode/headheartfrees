@@ -208,7 +208,7 @@ export function AccountMenu({ user }: { user: UserSummary }) {
               className={cn(
                 "flex min-h-11 items-center px-4",
                 "font-sans text-body-sm text-ink",
-                "transition-colors duration-150 ease-out hover:bg-clay-wash",
+                "transition-colors duration-150 ease-out hover:bg-accent-wash",
                 focusRing,
               )}
             >
@@ -230,7 +230,7 @@ export function AccountMenu({ user }: { user: UserSummary }) {
                 className={cn(
                   "flex min-h-11 items-center px-4",
                   "font-sans text-body-sm text-ink",
-                  "transition-colors duration-150 ease-out hover:bg-clay-wash",
+                  "transition-colors duration-150 ease-out hover:bg-accent-wash",
                   focusRing,
                 )}
               >
@@ -249,7 +249,7 @@ export function AccountMenu({ user }: { user: UserSummary }) {
               className={cn(
                 "flex min-h-11 w-full items-center px-4 text-left",
                 "font-sans text-body-sm text-ink",
-                "transition-colors duration-150 ease-out hover:bg-clay-wash",
+                "transition-colors duration-150 ease-out hover:bg-accent-wash",
                 "disabled:cursor-not-allowed disabled:text-(--color-disabled-text)",
                 focusRing,
               )}
@@ -280,7 +280,7 @@ export function AccountMenu({ user }: { user: UserSummary }) {
 }
 
 /**
- * One or two letters on a clay wash.
+ * One or two letters on a accent wash.
  *
  * `aria-hidden`, because the name it abbreviates is already in the trigger's
  * accessible name. Announcing "A" before it would be noise.
@@ -291,7 +291,7 @@ function Avatar({ user }: { user: UserSummary }) {
       aria-hidden="true"
       className={cn(
         "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-        "bg-clay-wash font-sans text-body-sm font-semibold text-(--color-text-accent)",
+        "bg-accent-wash font-sans text-body-sm font-semibold text-(--color-text-accent)",
       )}
     >
       {initials(user)}

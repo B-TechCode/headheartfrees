@@ -21,7 +21,7 @@ const toneClasses: Record<CalloutTone, string> = {
 /** A short rule above the title. The accent earns its place on `important` only. */
 const ruleClasses: Record<CalloutTone, string> = {
   note: "bg-rule-strong",
-  important: "bg-clay",
+  important: "bg-accent",
   caution: "bg-warning",
 };
 

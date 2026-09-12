@@ -74,7 +74,7 @@ export const disabledControl =
  *
  * 1. **Text: `ink-soft` to `ink`.** 9.30:1 to 15.34:1 on bone, 8.52:1 to
  *    14.05:1 on the footer. `ink-soft` was never an accessibility failure; it
- *    was a *hierarchy* failure. Beside a filled clay button it read as caption
+ *    was a *hierarchy* failure. Beside a filled accent button it read as caption
  *    text rather than as something you could press.
  *
  * 2. **Underline: `ink-faint`, at 2px instead of `auto`.** The brief offered
@@ -88,7 +88,7 @@ export const disabledControl =
  *    from the font. `decoration-2` is the change that makes it visible.
  *
  * 3. **Hover: a real colour shift.** Both the text and the underline move to
- *    `clay-deep` (6.03:1 on bone), rather than the underline alone changing
+ *    `accent` (11.34:1 on bone), rather than the underline alone changing
  *    while the text stays put. Two of the seven did not shift colour at all.
  *
  * `underline-offset-4` keeps the thicker rule off the descenders.

@@ -5846,3 +5846,189 @@ and it is checked as a status, a missing body field, and a missing `Set-Cookie`
 separates a database compromise from a full compromise, and nothing more. Saying
 "the secret is encrypted" and stopping would leave the next person believing
 something untrue at the moment it matters.
+
+---
+
+# Post-phase-9 — the accent retoned to the logo's maroon, and `clay` renamed to `accent`
+
+The client supplied `frontend/public/logo.jpeg` and asked for the site accent to
+match it. Maroon is clay's neighbour on the wheel — both warm, both earthy — so
+this is a retone inside one family, not a foreign colour arriving.
+
+## 1. Sampled, not estimated
+
+The logo is a JPEG, so single pixels are unreliable. Method: classify by HSV hue
+band, erode each mask by 1px to drop the anti-aliased fringe, average over a
+named rectangle, and take the 10th/90th luminance percentiles of the eroded
+stroke core for the endpoints. Image is 1380x752.
+
+**Maroon**
+
+| | Hex | Region |
+|---|---|---|
+| darkest | `#521221` | pure-maroon stroke core, darkest 10% (n=1066) |
+| **signature** | **`#5E1D2C`** | head-profile outline, x490-560 y250-395 (n=2297) |
+| corroborating | `#5F1D2D` | pure-maroon median, whole mark (n=10662) |
+| corroborating | `#581928` | "HH" wordmark glyphs, x405-610 y462-566 (n=8335) |
+| lightest | `#82404A` | stroke core, lightest 10% |
+
+Three independent regions land within 1-2 units of `#5E1D2C`. That is the
+identity maroon and it became `--hhf-accent`.
+
+**Champagne gold**
+
+| | Hex | Region |
+|---|---|---|
+| darkest | `#AA8871` | wing tip, transitioning toward maroon |
+| **signature** | **`#D8BD9E`** | hair arc gold segment, x560-660 y185-240 (n=307) |
+| corroborating | `#D6BA9C` | wing barbs mid, x740-860 y250-330 (n=1344) |
+| median | `#CCAF93` | pure-gold mask, whole mark (n=5236) |
+| lightest | `#EED6B4` | stroke core, lightest 10% |
+
+**Charcoal** `#50504F` ("FreeS" glyphs, n=10297); tagline darker at `#41413F`.
+**Background** `#F5F2EE`, consistent across three corners (n=14400 each). The
+`#FEFEFE` at the centre is the vignette glow, not the base.
+
+## 2. What gold can and cannot do
+
+Gold on bone measures **1.64:1**. That fails the 4.5 text bar *and* the 3.0
+graphic bar. The brief proposed a gold hairline as a legitimate use at 3:1; it
+is not one, and the correction matters more than the suggestion.
+
+| Use | Ratio | |
+|---|---|---|
+| ink on gold band | **9.37:1** | PASS AAA - the one role it was given |
+| ink on gold-wash | **11.95:1** | PASS AAA |
+| gold on accent | **6.93:1** | PASS - the logo's own pairing |
+| gold on bone | 1.64:1 | FAIL - fails text *and* graphics |
+| white on gold | 1.80:1 | FAIL - illegible, not merely sub-AA |
+| gold-deep on bone | 2.96:1 | FAIL - still short of 3:1 |
+
+So gold is a **background that carries ink**, never a foreground on bone. The
+hairline (`band-rule`, gold-deep) is permitted on exactly the terms `rule`
+(1.32:1) already uses — decorative, conveys nothing, never bounds a control. It
+is not a 3:1 graphic element; it misses.
+
+Gold was deliberately **not darkened to make it pass**. The darkest gold present
+in the logo is gold-deep, and it still fails 3:1 while already reading brown. A
+gold dark enough to carry white text is not the logo's colour.
+
+**Gold is defined and documented but not yet adopted by any component.** Where a
+gold band belongs is a design decision, not a retone; the tokens and the rule
+are in place for whoever makes it.
+
+## 3. Hover had to reverse direction
+
+Clay was light enough that a darker hover read clearly — dE~12.8 between states.
+Every maroon in the logo is 6.9-13:1 on bone, and darkening from `#5E1D2C`
+compresses to **dE 6.6**: the state stops being perceptible, which is the whole
+purpose of a state. Hover now **lifts** to `#7A2E3D` (dE 9.6) and active still
+deepens to `#4C1523`, so rest/hover/active stay mutually distinguishable.
+
+## 4. Re-measured off the rendered DOM
+
+Production build, headless Chrome 1440x1000, computed style with forced
+pseudo-states, backgrounds flattened through the ancestor chain. Three items
+cross-checked against screenshot pixels.
+
+| | Measured | Bar | |
+|---|---|---|---|
+| white label on accent fill | **12.44:1** | 4.5 | PASS |
+| accent fill vs page (graphic) | 12.16:1 | 3.0 | PASS |
+| button hover — label on fill | 9.19:1 | 4.5 | PASS |
+| button hover — fill vs page | 8.98:1 | 3.0 | PASS |
+| button active — label on fill | 14.60:1 | 4.5 | PASS |
+| button active — fill vs page | 14.26:1 | 3.0 | PASS |
+| hero accent word (64px, was clay-deep) | 12.16:1 | 3.0 | PASS |
+| link text at rest | 9.30:1 | 4.5 | PASS |
+| link underline at rest (ink-faint by design) | 4.50:1 | 3.0 | PASS |
+| link hover — text | 11.34:1 | 4.5 | PASS |
+| link hover — underline | 11.34:1 | 3.0 | PASS |
+| footer link at rest | 9.97:1 | 4.5 | PASS |
+| footer link hover | 16.45:1 | 4.5 | PASS |
+| navbar link hover | 15.34:1 | 4.5 | PASS |
+| SectionRule hairline vs surface | 11.34:1 | 3.0 | PASS |
+| navbar current-page rule (`::after`) | 11.34:1 | 3.0 | PASS |
+| footer hairline | 12.16:1 | 3.0 | PASS |
+| selected chip — ink on accent-wash | 13.42:1 | 4.5 | PASS |
+| selected chip — border vs page | 11.34:1 | 3.0 | PASS |
+| unselected chip hover — text | 16.45:1 | 4.5 | PASS |
+| focus ring vs page background | **6.72:1** | 3.0 | PASS |
+
+Maroon is darker than clay, so almost everything improved. The button label went
+4.54 -> 12.44; the hero word 6.03 -> 12.16; the chip border 4.14 -> 11.34.
+
+**Three items sit under 3:1 and none is a regression.** Each is satisfied by a
+different mechanism, and each measured the same or better before the retone:
+
+- **focus ring vs accent fill, 1.81:1.** `outline-offset: 2px` puts a 2px gap of
+  page background between fill and ring, so the adjacent colour is bone, where
+  the ring is 6.72:1. Against clay this was 1.51:1 — the retone improved it.
+- **selected chip wash vs page, 1.14:1.** Chip.tsx carries the state on the
+  border (11.34:1) and ink + font-medium; the wash is reinforcement. clay-tint
+  was 1.13:1.
+- **ghosted hero watermark, 1.63:1.** Decorative, `aria-hidden`.
+
+**The watermark is why pixels were sampled.** `getComputedStyle` returns
+`oklab(0.337378 0.0937479 0.0162755 / 0.25)` unresolved for
+`color-mix(in oklab, ...)`, and reading those numbers as RGB gives a plausible,
+wrong 1.83:1. The rendered pixel at the densest stroke is `#D7C4C4` ->
+**1.63:1**. Screenshot sampling also confirmed the button fill renders as
+literally `#5E1D2C` across 91.8% of its pixels.
+
+## 5. The standing rule was reversed, not inherited
+
+globals.css carried: *"`clay` is never a text colour"* — true at 4.14:1. Maroon
+measures **11.34:1**, clearing AA by 2.5x and AAA outright. The prohibition
+described a colour no longer in the palette, so it is gone rather than carried
+forward. `--color-text-accent` now points at `accent` itself instead of a
+darkened variant, and Hero.tsx's comment explaining the workaround was rewritten
+to record that the constraint was lifted.
+
+## 6. Audits
+
+- **Lighthouse accessibility: 100 on all 15 scorable routes.** `/nope-404`
+  returns `ERRORED_DOCUMENT_REQUEST` as before — Lighthouse refuses any page
+  served 404. Tooling limitation, not a finding, and covered below.
+- **axe-core 4.10.2 over CDP, wcag2a/2aa/21a/21aa: 0 violations across all 16
+  routes, `/nope-404` included.** 21-27 rules passed per route. **0 incomplete**
+  — the `color-contrast` incomplete previously flagged on `/vent` no longer
+  appears.
+- `npm test` 107 passed / 18 files. `typecheck` clean. `lint` clean. Build clean.
+
+## 7. Did the raw-layer-only edit hold?
+
+**For colour, yes — completely.** Every hex lives in `--hhf-*`. No component
+gained a colour value. The only hex outside globals.css is Google's brand mark
+in GoogleButton.tsx, which is correct.
+
+**Two things still forced component edits, and only one was expected.**
+
+The rename `clay` -> `accent` touched 37 files. That was the approved choice and
+it is identifier churn, not colour churn — `accent` is role-named, so a third
+retone will not need a third sweep.
+
+The unexpected one: **measured contrast ratios were duplicated as prose in six
+components** — Footer, Hero, SectionRule, Spinner, styles.ts, Chip. A hue change
+invalidated all of them, and they had to be re-measured and rewritten by hand:
+`4.14`, `6.03`, `3.79`, `5.52`, `1.37`, `6.46` were all quietly wrong the moment
+the raw layer changed. The colour tokens have a single source of truth; the
+*numbers describing them* do not. That is the discipline gap this phase found.
+
+## 8. One thing renaming exposed
+
+`@theme inline` had `--color-clay: var(--color-accent)` — safe, because the two
+layers used different names. Renaming collapsed them onto one name and turned it
+into exactly the self-reference bug documented at the top of the file: Tailwind
+emits `--color-accent` into `:root` beside the semantic declaration, and it only
+resolves because of source order. The five accent entries and the two gold ones
+now read `--hhf-*` directly, like the surface and status entries already did.
+The `ink`/`rule` entries still point at the semantic layer and remain safe,
+because those Tailwind names differ from the semantic names they read.
+
+## 9. Not done, deliberately
+
+The logo itself is untouched. The JPEG cannot go on the site — opaque off-white
+background, strokes below a pixel at navbar size, and a wordmark reading
+"HHFreeS" where the site says "HeadHeartFreeS". It needs tracing to SVG by a
+designer. The exhale mark stays in place.

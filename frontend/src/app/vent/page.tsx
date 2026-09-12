@@ -26,7 +26,7 @@ export default function VentPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6 lg:py-16">
       <header className="max-w-xl">
-        <span aria-hidden="true" className="block h-px w-12 bg-clay" />
+        <span aria-hidden="true" className="block h-px w-12 bg-accent" />
         <h1 className="mt-6 font-display text-h1 text-ink">Put it down here.</h1>
         <p className="mt-4 text-body-lg text-ink-soft">
           No one is reading this. Not us, not a machine. Write it, release it, and it is

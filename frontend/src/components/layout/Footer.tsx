@@ -42,8 +42,9 @@ export function Footer() {
       for normal text. The only `ink-faint` in this file is inside the crisis
       strip, which stays on `surface-raised` where it measures 4.82:1.
 
-      Measured on `surface-sunk` #EFEAE1: ink 14.05, ink-soft 8.52, clay-deep
-      (every hover) 5.52, clay hairline 3.79 against a 3.0 graphic threshold.
+      Measured on `surface-sunk` #EFEAE1: ink 14.05, ink-soft 8.52, accent
+      10.38, accent-hover (every hover) 7.67, accent hairline 10.38 against a
+      3.0 graphic threshold.
     */
     <footer className="app-layer mt-auto border-t border-rule bg-surface-sunk">
       <CrisisStrip />
@@ -173,7 +174,7 @@ export function Footer() {
  * a warning icon, or headed with the word "crisis". Someone reaching this strip
  * is having a hard enough day without the page raising its voice at them. It
  * should read as steady and available — the tone of a light left on, not an
- * alarm. `surface-raised` plus a clay hairline gives it presence without
+ * alarm. `surface-raised` plus a accent hairline gives it presence without
  * urgency.
  */
 function CrisisStrip() {
@@ -183,8 +184,8 @@ function CrisisStrip() {
       className="border-b border-rule bg-surface-raised"
     >
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* A single clay hairline: present, not loud. */}
-        <span aria-hidden="true" className="block h-px w-10 bg-clay" />
+        {/* A single accent hairline: present, not loud. */}
+        <span aria-hidden="true" className="block h-px w-10 bg-accent" />
 
         <h2 id="helplines-heading" className="mt-4 font-display text-h4 text-ink">
           If you would rather talk to someone.
@@ -219,7 +220,7 @@ function CrisisStrip() {
                 <span
                   className={cn(
                     "underline decoration-ink-faint decoration-from-font underline-offset-4",
-                    "group-hover:text-(--color-text-accent) group-hover:decoration-clay",
+                    "group-hover:text-(--color-text-accent) group-hover:decoration-accent",
                   )}
                 >
                   {line.number}
@@ -235,7 +236,7 @@ function CrisisStrip() {
             href="/crisis-resources"
             className={cn(
               "rounded-sm underline decoration-ink-faint underline-offset-4",
-              "hover:text-(--color-text-accent) hover:decoration-clay",
+              "hover:text-(--color-text-accent) hover:decoration-accent",
               focusRing,
             )}
           >
@@ -262,7 +263,7 @@ function CrisisStrip() {
  * Three changes, all typographic. Nothing was added to fill space: the same
  * four links, no new ones, and the Navigate column stays gone.
  *
- * 1. The clay hairline above the heading. The same motif the crisis strip and
+ * 1. The accent hairline above the heading. The same motif the crisis strip and
  *    `/vent/released` open with, so the column is announced the way every
  *    other section of this site is rather than just starting.
  * 2. The heading is `text-h4` in full ink, matching "A place to put it down."
@@ -294,7 +295,7 @@ function FooterColumn({
                 "inline-flex min-h-11 items-center rounded-sm text-body text-ink",
                 "underline decoration-transparent underline-offset-4",
                 "transition-colors duration-150 ease-out",
-                "hover:text-(--color-text-accent) hover:decoration-clay",
+                "hover:text-(--color-text-accent) hover:decoration-accent",
                 focusRing,
               )}
             >

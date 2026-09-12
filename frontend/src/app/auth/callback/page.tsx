@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 export default function AuthCallbackPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-20 sm:px-6 lg:py-28">
-      <span aria-hidden="true" className="block h-px w-12 bg-clay" />
+      <span aria-hidden="true" className="block h-px w-12 bg-accent" />
       <h1 className="mt-6 font-display text-h2 text-ink">One moment.</h1>
 
       <Suspense fallback={null}>

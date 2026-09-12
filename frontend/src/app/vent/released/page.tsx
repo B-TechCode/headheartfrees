@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 export default function ReleasedPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6 lg:py-24">
-      <span aria-hidden="true" className="block h-px w-12 bg-clay" />
+      <span aria-hidden="true" className="block h-px w-12 bg-accent" />
 
       <h1 className="mt-6 font-display text-h1 text-ink">It&rsquo;s gone.</h1>
 
@@ -53,9 +53,9 @@ export default function ReleasedPage() {
           className={cn(
             "inline-flex h-12 items-center justify-center rounded-md px-5",
             "font-sans text-body font-medium tracking-[0.005em]",
-            "border border-transparent bg-clay text-on-clay",
+            "border border-transparent bg-accent text-on-accent",
             "transition-[background-color,border-color] duration-150 ease-out",
-            "hover:bg-clay-hover active:bg-clay-active active:translate-y-[0.5px]",
+            "hover:bg-accent-hover active:bg-accent-active active:translate-y-[0.5px]",
             focusRing,
           )}
         >
@@ -88,7 +88,7 @@ export default function ReleasedPage() {
           href="/support"
           className={cn(
             "rounded-sm underline decoration-ink-faint underline-offset-4",
-            "hover:text-(--color-text-accent) hover:decoration-clay",
+            "hover:text-(--color-text-accent) hover:decoration-accent",
             focusRing,
           )}
         >

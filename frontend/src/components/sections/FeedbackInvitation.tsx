@@ -49,7 +49,7 @@ export function FeedbackInvitation() {
               className={cn(
                 "rounded-sm underline decoration-ink-faint underline-offset-4",
                 "text-(--color-text-accent) transition-colors duration-150 ease-out",
-                "hover:decoration-clay",
+                "hover:decoration-accent",
                 focusRing,
               )}
             >

@@ -61,7 +61,7 @@ export default function ContactPage() {
             href="/crisis-resources"
             className={cn(
               "inline-flex min-h-11 items-center rounded-sm text-body font-medium",
-              "text-(--color-text-accent) underline decoration-clay underline-offset-4",
+              "text-(--color-text-accent) underline decoration-accent underline-offset-4",
               "hover:text-ink hover:decoration-ink-faint",
               focusRing,
             )}
@@ -95,7 +95,7 @@ export default function ContactPage() {
               "inline-flex min-h-11 items-center rounded-sm font-display text-h3",
               "text-(--color-text-accent)",
               "underline decoration-ink-faint decoration-from-font underline-offset-[6px]",
-              "transition-colors duration-150 ease-out hover:decoration-clay",
+              "transition-colors duration-150 ease-out hover:decoration-accent",
               CONTACT_EMAIL_IS_PLACEHOLDER && "line-through decoration-ink-faint",
               focusRing,
             )}
@@ -118,7 +118,7 @@ export default function ContactPage() {
           Good reasons to write
         </h2>
 
-        <ul className="mt-4 flex max-w-[68ch] list-disc flex-col gap-2 pl-5 marker:text-clay">
+        <ul className="mt-4 flex max-w-[68ch] list-disc flex-col gap-2 pl-5 marker:text-accent">
           {GOOD_REASONS.map((reason) => (
             <li key={reason} className="pl-1 text-body text-ink-soft">
               {reason}
@@ -152,7 +152,7 @@ export default function ContactPage() {
               href="/crisis-resources"
               className={cn(
                 "rounded-sm text-(--color-text-accent) underline decoration-ink-faint underline-offset-4",
-                "hover:decoration-clay",
+                "hover:decoration-accent",
                 focusRing,
               )}
             >

@@ -41,13 +41,17 @@ export function Hero() {
             last word rather than a phrase: "put it down" is what the product
             does, and the sentence resolves on it.
 
-            `clay-deep` (--color-text-accent), not `clay`. At `text-display`
-            this is 40-64px, so WCAG treats it as large text needing 3.0 —
-            `clay` would technically clear that at 4.14:1, but globals.css §1
-            holds that clay is never a text colour anywhere on this site, and
-            one hero is not a reason to make the rule conditional. clay-deep
-            measures 6.03:1 on `surface` and 6.46:1 on the `surface-raised`
-            this hero actually sits on.
+            `accent`, via --color-text-accent. At `text-display` this is
+            40-64px, so WCAG treats it as large text needing only 3.0 — but it
+            clears the 4.5 normal-text bar anyway, and then AAA on top: accent
+            measures 12.16:1 on the `surface-raised` this hero actually sits
+            on, and 11.34:1 on `surface`.
+
+            This comment used to explain why the accent word had to borrow a
+            darker variant: clay was 4.14:1 and globals.css banned it as a text
+            colour outright. The maroon retone removed that constraint — the
+            accent is now the darkest it has ever been — so the word uses the
+            accent itself and the workaround is gone.
           */}
           <h1 className="mt-6 font-display text-display text-ink">
             Somewhere to put it <span className="text-(--color-text-accent)">down.</span>
@@ -64,9 +68,9 @@ export function Hero() {
               className={cn(
                 "inline-flex h-14 items-center justify-center rounded-md px-7",
                 "font-sans text-body-lg font-medium tracking-[0.005em]",
-                "border border-transparent bg-clay text-on-clay",
+                "border border-transparent bg-accent text-on-accent",
                 "transition-[background-color,border-color] duration-150 ease-out",
-                "hover:bg-clay-hover active:bg-clay-active active:translate-y-[0.5px]",
+                "hover:bg-accent-hover active:bg-accent-active active:translate-y-[0.5px]",
                 focusRing,
               )}
             >
@@ -98,7 +102,7 @@ export function Hero() {
           aria-hidden="true"
           className="pointer-events-none hidden lg:col-span-5 lg:flex lg:items-end lg:justify-end lg:overflow-hidden"
         >
-          <Logo title={null} className="h-72 w-72 translate-x-10 translate-y-4 text-clay/25" />
+          <Logo title={null} className="h-72 w-72 translate-x-10 translate-y-4 text-accent/25" />
         </div>
       </div>
     </section>

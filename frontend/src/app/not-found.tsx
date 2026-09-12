@@ -48,9 +48,9 @@ export default function NotFound() {
           className={cn(
             "inline-flex h-12 items-center justify-center rounded-md px-5",
             "font-sans text-body font-medium tracking-[0.005em]",
-            "border border-transparent bg-clay text-on-clay",
+            "border border-transparent bg-accent text-on-accent",
             "transition-[background-color,border-color,color] duration-150 ease-out",
-            "hover:bg-clay-hover active:bg-clay-active active:translate-y-[0.5px]",
+            "hover:bg-accent-hover active:bg-accent-active active:translate-y-[0.5px]",
             focusRing,
           )}
         >

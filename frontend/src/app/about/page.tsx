@@ -115,7 +115,7 @@ export default function AboutPage() {
         <Link
           href="/vent"
           className={cn(
-            "rounded-sm underline decoration-clay underline-offset-4",
+            "rounded-sm underline decoration-accent underline-offset-4",
             "hover:text-(--color-text-accent)",
             focusRing,
           )}

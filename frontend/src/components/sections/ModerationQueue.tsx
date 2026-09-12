@@ -240,7 +240,7 @@ function FilterTab({
       className={cn(
         "inline-flex min-h-11 items-center rounded-md px-4",
         "font-sans text-body-sm transition-colors duration-150 ease-out",
-        active ? "bg-clay-wash font-medium text-ink" : "text-ink-soft hover:bg-clay-wash",
+        active ? "bg-accent-wash font-medium text-ink" : "text-ink-soft hover:bg-accent-wash",
         focusRing,
       )}
     >
@@ -273,7 +273,7 @@ function QueueRow({
       <summary
         className={cn(
           "flex cursor-pointer list-none items-center gap-4 px-1 py-4 sm:px-2",
-          "transition-colors duration-150 ease-out hover:bg-clay-wash",
+          "transition-colors duration-150 ease-out hover:bg-accent-wash",
           focusRing,
         )}
       >
@@ -479,7 +479,7 @@ function StatusBadge({ status }: { status: FeedbackStatus }) {
       className={cn(
         "inline-flex shrink-0 items-center rounded-sm px-2 py-0.5",
         "font-sans text-caption",
-        status === "APPROVED" && "bg-clay-wash text-(--color-text-accent)",
+        status === "APPROVED" && "bg-accent-wash text-(--color-text-accent)",
         status === "PENDING" && "bg-surface-sunk text-ink-soft",
         status === "REJECTED" && "bg-surface-sunk text-ink-faint",
       )}

@@ -29,21 +29,21 @@ export function Prose({ children, className }: { children: ReactNode; className?
         // there is nothing for a screen reader to announce.
         "[&_h2]:font-display [&_h2]:text-h3 [&_h2]:text-ink [&_h2]:mt-12 [&_h2]:mb-3",
         "[&_h2]:before:content-[''] [&_h2]:before:mb-4 [&_h2]:before:block",
-        "[&_h2]:before:h-px [&_h2]:before:w-10 [&_h2]:before:bg-clay",
+        "[&_h2]:before:h-px [&_h2]:before:w-10 [&_h2]:before:bg-accent",
         "[&_h3]:font-display [&_h3]:text-h4 [&_h3]:text-ink [&_h3]:mt-8 [&_h3]:mb-2",
         // Body
         "[&_p]:text-body [&_p]:text-ink-soft [&_p]:mt-4",
         "[&_p:first-child]:mt-0",
-        // Lists. Markers in clay: the one accent, at the smallest possible dose.
+        // Lists. Markers in accent: the one accent, at the smallest possible dose.
         "[&_ul]:mt-4 [&_ul]:flex [&_ul]:flex-col [&_ul]:gap-2 [&_ul]:pl-5",
-        "[&_ul]:list-disc [&_ul]:marker:text-clay",
+        "[&_ul]:list-disc [&_ul]:marker:text-accent",
         "[&_ol]:mt-4 [&_ol]:flex [&_ol]:flex-col [&_ol]:gap-2 [&_ol]:pl-5",
         "[&_ol]:list-decimal [&_ol]:marker:text-ink-faint",
         "[&_li]:text-body [&_li]:text-ink-soft [&_li]:pl-1",
         // Inline
         "[&_strong]:font-semibold [&_strong]:text-ink",
         "[&_a]:text-(--color-text-accent) [&_a]:underline [&_a]:decoration-ink-faint",
-        "[&_a]:underline-offset-4 hover:[&_a]:decoration-clay",
+        "[&_a]:underline-offset-4 hover:[&_a]:decoration-accent",
         // Separators between major blocks, not between every paragraph.
         "[&_hr]:my-10 [&_hr]:border-rule",
         className,

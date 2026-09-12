@@ -115,7 +115,7 @@ export default function CommunityGuidelinesPage() {
           className={cn(
             "inline-flex min-h-11 items-center rounded-sm text-body",
             "text-(--color-text-accent) underline decoration-ink-faint underline-offset-4",
-            "hover:decoration-clay",
+            "hover:decoration-accent",
             focusRing,
           )}
         >
@@ -128,7 +128,7 @@ export default function CommunityGuidelinesPage() {
         <Link
           href="/privacy"
           className={cn(
-            "rounded-sm underline decoration-ink-faint underline-offset-4 hover:decoration-clay",
+            "rounded-sm underline decoration-ink-faint underline-offset-4 hover:decoration-accent",
             focusRing,
           )}
         >
@@ -138,7 +138,7 @@ export default function CommunityGuidelinesPage() {
         <Link
           href="/crisis-resources"
           className={cn(
-            "rounded-sm underline decoration-ink-faint underline-offset-4 hover:decoration-clay",
+            "rounded-sm underline decoration-ink-faint underline-offset-4 hover:decoration-accent",
             focusRing,
           )}
         >

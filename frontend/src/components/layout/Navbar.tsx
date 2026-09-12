@@ -88,7 +88,7 @@ export function Navbar() {
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6 lg:h-20 lg:px-8">
         <Link
           href="/"
-          className={cn("rounded-sm text-ink transition-colors hover:text-clay-hover", focusRing)}
+          className={cn("rounded-sm text-ink transition-colors hover:text-accent-hover", focusRing)}
         >
           <Wordmark />
         </Link>
@@ -184,7 +184,7 @@ export function Navbar() {
                   className={cn(
                     "flex min-h-12 items-center rounded-md px-3",
                     "font-sans text-body text-ink transition-colors duration-150 ease-out",
-                    "hover:bg-clay-wash",
+                    "hover:bg-accent-wash",
                     isCurrent(link.href) && "font-medium",
                     focusRing,
                   )}
@@ -207,7 +207,7 @@ export function Navbar() {
                   className={cn(
                     "flex min-h-12 items-center rounded-md px-3",
                     "font-sans text-body font-medium text-ink",
-                    "transition-colors duration-150 ease-out hover:bg-clay-wash",
+                    "transition-colors duration-150 ease-out hover:bg-accent-wash",
                     focusRing,
                   )}
                 >
@@ -237,7 +237,7 @@ function MobileAccountItems({ user }: { user: UserSummary }) {
   const itemClasses = cn(
     "flex min-h-12 w-full items-center rounded-md px-3 text-left",
     "font-sans text-body text-ink",
-    "transition-colors duration-150 ease-out hover:bg-clay-wash",
+    "transition-colors duration-150 ease-out hover:bg-accent-wash",
     focusRing,
   );
 
@@ -303,10 +303,10 @@ function NavLink({
         "relative inline-flex h-11 items-center rounded-sm px-3",
         "font-sans text-body-sm text-ink-soft",
         "transition-colors duration-150 ease-out hover:text-ink",
-        // The current page is marked by a short clay rule under the label, not
+        // The current page is marked by a short accent rule under the label, not
         // by a filled pill. One accent, used once.
         current &&
-          "text-ink font-medium after:absolute after:inset-x-3 after:bottom-1.5 after:h-px after:bg-clay",
+          "text-ink font-medium after:absolute after:inset-x-3 after:bottom-1.5 after:h-px after:bg-accent",
         focusRing,
       )}
     >

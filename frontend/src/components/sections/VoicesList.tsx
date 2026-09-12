@@ -144,7 +144,7 @@ function EmptyWall() {
         href="/vent"
         className={cn(
           "mt-6 inline-flex min-h-11 items-center rounded-sm text-body-lg",
-          "text-(--color-text-accent) underline decoration-clay underline-offset-4",
+          "text-(--color-text-accent) underline decoration-accent underline-offset-4",
           "transition-colors duration-150 ease-out hover:text-ink hover:decoration-ink-faint",
           focusRing,
         )}
@@ -199,7 +199,7 @@ function Rating({ value }: { value: number }) {
           <svg
             key={star}
             viewBox="0 0 24 24"
-            className={cn("h-4 w-4", star <= value ? "text-clay" : "text-ink-faint")}
+            className={cn("h-4 w-4", star <= value ? "text-accent" : "text-ink-faint")}
             fill={star <= value ? "currentColor" : "none"}
             stroke="currentColor"
             strokeWidth={star <= value ? 1 : 1.5}

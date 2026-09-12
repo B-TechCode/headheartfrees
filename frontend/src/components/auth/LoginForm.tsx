@@ -197,7 +197,7 @@ export function LoginForm() {
           href={destination === "/" ? "/register" : `/register?next=${encodeURIComponent(destination)}`}
           className={cn(
             "rounded-sm font-medium text-(--color-text-accent) underline underline-offset-2",
-            "transition-colors duration-150 ease-out hover:text-clay-active",
+            "transition-colors duration-150 ease-out hover:text-accent-active",
             focusRing,
           )}
         >

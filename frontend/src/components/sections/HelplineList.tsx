@@ -25,7 +25,7 @@ export function HelplineList({ helplines }: { helplines: readonly Helpline[] }) 
               "group block rounded-lg border border-rule bg-surface-raised",
               "px-5 py-4 sm:px-6 sm:py-5",
               "transition-[border-color,background-color] duration-150 ease-out",
-              "hover:border-clay",
+              "hover:border-accent",
               focusRing,
             )}
           >
@@ -34,7 +34,7 @@ export function HelplineList({ helplines }: { helplines: readonly Helpline[] }) 
                 className={cn(
                   "font-display text-h3 text-ink",
                   "underline decoration-ink-faint decoration-from-font underline-offset-[6px]",
-                  "group-hover:decoration-clay",
+                  "group-hover:decoration-accent",
                 )}
               >
                 {line.prefix ? (

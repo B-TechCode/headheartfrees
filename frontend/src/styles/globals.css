@@ -8,13 +8,13 @@
  * utilities that resolve back to the tokens below.
  *
  * Layout of this file:
- *   1. Ink & Clay palette   — as supplied, raw layer + semantic layer
+ *   1. Ink & Accent palette — raw layer + semantic layer
  *   2. Phase 2 additions    — type scale, radii, shadow, fonts, focus
  *   3. Base layer           — element defaults, grain overlay, reduced motion
  */
 
 /* =========================================================================
- * 1. Ink & Clay palette
+ * 1. Ink & Accent palette
  * ========================================================================= */
 
 :root {
@@ -34,20 +34,49 @@
   --hhf-rule:        #DDD6CA;
   --hhf-rule-strong: #C3BAAA;
 
-  /* Clay — the single accent. Used sparingly and deliberately. */
-  --hhf-clay:        #B85C38;
-  --hhf-clay-deep:   #93472B;   /* hover */
-  --hhf-clay-dark:   #6F351F;   /* active/pressed */
-  --hhf-clay-tint:   #F3E4DC;   /* washes, selected chips */
+  /* Accent — the single accent, sampled from the logo's maroon.
+   *
+   * Named for its ROLE, not its hue. This is the second retone (terracotta
+   * clay → maroon); a token called `clay` or `maroon` only guarantees a third
+   * rename sweep the next time the brand moves. `accent` survives any hue.
+   *
+   * Values are measured off frontend/public/logo.jpeg, not estimated:
+   *   accent        the head-profile outline, the logo's identity maroon
+   *   accent-hover  the lightest maroon present in the stroke gradient
+   *   accent-active the darkest maroon present in the stroke core
+   *
+   * Note the hover LIFTS rather than deepens. Clay was light enough that a
+   * darker hover read clearly (ΔE≈12.8 between states). Maroon starts at
+   * 11.34:1 on bone, and darkening from there compresses to ΔE≈6.6 — the
+   * state stops being perceptible, which defeats its purpose. Lifting to
+   * #7A2E3D restores ΔE 9.6. Active still deepens, so hover and active remain
+   * distinguishable from each other and from rest.
+   */
+  --hhf-accent:        #5E1D2C;
+  --hhf-accent-hover:  #7A2E3D;   /* hover — lighter, see above */
+  --hhf-accent-active: #4C1523;   /* active/pressed */
+  --hhf-accent-wash:   #F1E2E4;   /* washes, selected chips */
+  --hhf-on-accent:     #FFFFFF;   /* label colour on an accent fill */
 
-  /* Status. Muted to sit beside clay without shouting. */
+  /* Champagne gold — the logo's second colour, sampled from the wing and the
+   * hair arc. It is LIGHT (1.64:1 on bone), so its uses are tightly bounded
+   * and enumerated in the contrast note below. It is deliberately not
+   * darkened to make it pass: gold dark enough to carry white text is brown,
+   * and stops being the logo's colour. */
+  --hhf-gold:        #D8BD9E;
+  --hhf-gold-deep:   #AA8871;   /* decorative hairline only — 2.96:1 */
+  --hhf-gold-wash:   #EED6B4;
+
+  /* Status. Muted to sit beside the accent without shouting. */
   --hhf-success:     #3F6B4E;
   --hhf-warning:     #8A6512;
   --hhf-danger:      #A33B2E;
   --hhf-info:        #395A73;
 
-  /* Focus ring — deliberately not clay, so focus never reads as an error
-     or as a primary action. */
+  /* Focus ring — deliberately not the accent, so focus never reads as an
+     error or as a primary action. Unchanged by the maroon retone: it sits on
+     the page background (outline-offset: 2px), not on the control fill, so
+     the governing ratio is ring-vs-bone 6.27:1 and bone did not move. */
   --hhf-focus:       #2F5D8A;
 
   /* ---- Semantic roles ------------------------------------------------ */
@@ -61,17 +90,23 @@
   --color-text-soft:          var(--hhf-ink-soft);
   --color-text-faint:         var(--hhf-ink-faint);
   --color-text-inverse:       var(--hhf-bone);
-  --color-text-accent:        var(--hhf-clay-deep);
+  --color-text-accent:        var(--hhf-accent);
 
   --color-border:             var(--hhf-rule);
   --color-border-strong:      var(--hhf-rule-strong);
   --color-border-focus:       var(--hhf-focus);
 
-  --color-accent:             var(--hhf-clay);
-  --color-accent-hover:       var(--hhf-clay-deep);
-  --color-accent-active:      var(--hhf-clay-dark);
-  --color-accent-wash:        var(--hhf-clay-tint);
-  --color-on-accent:          #FFFFFF;
+  --color-accent:             var(--hhf-accent);
+  --color-accent-hover:       var(--hhf-accent-hover);
+  --color-accent-active:      var(--hhf-accent-active);
+  --color-accent-wash:        var(--hhf-accent-wash);
+  --color-on-accent:          var(--hhf-on-accent);
+
+  /* Gold earns exactly one role: a band whose text is ink (9.37:1, AAA).
+     It is not a text colour, not a fill under white text, and not a control
+     border. band-rule is decorative separation only — see the note below. */
+  --color-band-surface:       var(--hhf-gold);
+  --color-band-rule:          var(--hhf-gold-deep);
 
   --color-success:            var(--hhf-success);
   --color-warning:            var(--hhf-warning);
@@ -87,14 +122,25 @@
 /*
  * Expose the semantic layer to Tailwind: bg-surface, text-ink-soft, border-rule…
  *
- * The eight `--color-surface*` / status entries point at the RAW layer rather
- * than at the identically-named semantic variable. Writing
+ * Entries whose Tailwind name matches a semantic name point at the RAW layer
+ * rather than at the identically-named semantic variable. Writing
  * `--color-surface: var(--color-surface)` here — as the supplied palette did —
  * is a self-reference: Tailwind emits it into :root alongside the semantic
  * declaration above, and the file only works because the semantic block happens
- * to land later in the cascade. Reorder this file and every surface and status
- * colour silently becomes invalid. Pointing at --hhf-* removes the ordering
- * dependency entirely. Token names are unchanged.
+ * to land later in the cascade. Reorder this file and every such colour
+ * silently becomes invalid. Pointing at --hhf-* removes the ordering
+ * dependency entirely.
+ *
+ * The accent family joined that set when it was renamed from `clay` to
+ * `accent`. Under the old name the two layers differed (`--color-clay` here,
+ * `--color-accent` above), so `var(--color-accent)` was a safe cross-reference.
+ * Renaming collapsed them onto one name and turned it into precisely the
+ * self-reference described above, so the five accent entries — and the two
+ * gold ones — now resolve through --hhf-* like the rest.
+ *
+ * The `--color-ink*` / `--color-rule*` entries still point at the semantic
+ * layer, and remain safe: those Tailwind names (ink, rule) differ from the
+ * semantic names they read (text, border).
  */
 @theme inline {
   --color-surface:          var(--hhf-bone);
@@ -110,11 +156,14 @@
   --color-rule:             var(--color-border);
   --color-rule-strong:      var(--color-border-strong);
 
-  --color-clay:             var(--color-accent);
-  --color-clay-hover:       var(--color-accent-hover);
-  --color-clay-active:      var(--color-accent-active);
-  --color-clay-wash:        var(--color-accent-wash);
-  --color-on-clay:          var(--color-on-accent);
+  --color-accent:           var(--hhf-accent);
+  --color-accent-hover:     var(--hhf-accent-hover);
+  --color-accent-active:    var(--hhf-accent-active);
+  --color-accent-wash:      var(--hhf-accent-wash);
+  --color-on-accent:        var(--hhf-on-accent);
+
+  --color-band:             var(--hhf-gold);
+  --color-band-rule:        var(--hhf-gold-deep);
 
   --color-success:          var(--hhf-success);
   --color-warning:          var(--hhf-warning);
@@ -129,22 +178,54 @@
  * ink-faint and clay families. These are computed from the hex values above
  * using the WCAG 2.x relative-luminance formula:
  *
- *   ink          15.34:1   AAA body text
- *   ink-soft      9.30:1   AAA
- *   ink-faint     4.50:1   *** just under AA for normal text (needs 4.50) ***
- *   clay          4.14:1   *** FAILS AA as text. Graphics only (needs 3.0) ***
- *   clay-deep     6.03:1   AA everywhere, safe for links
- *   white on clay 4.54:1   AA for button labels, with almost no margin
+ *   ink             15.34:1   AAA body text
+ *   ink-soft         9.30:1   AAA
+ *   ink-faint        4.50:1   *** just under AA for normal text (needs 4.50) ***
+ *   accent          11.34:1   AAA — safe as text, see note 1
+ *   accent-hover     8.37:1   AAA
+ *   accent-active   13.30:1   AAA
+ *   white on accent 12.44:1   AA/AAA for button labels, with real margin
  *
  * Two consequences, both applied in the components:
  *
- * 1. `clay` is never a text colour. Links and accent text use `clay-deep`
- *    (exposed as --color-text-accent). `clay` is for fills, rules and the
- *    logo, all of which only need 3:1.
+ * 1. `accent` IS a text colour, as of the maroon retone.
+ *
+ *    This reverses the rule that stood while the accent was clay. Clay
+ *    measured 4.14:1 and genuinely failed AA as text, so the file carried a
+ *    blanket prohibition and links used the darker `clay-deep`. Maroon
+ *    measures 11.34:1 — it clears AA (4.5) by 2.5×, and clears AAA (7.0)
+ *    outright. The prohibition described a colour that is no longer in the
+ *    palette, so it is gone rather than inherited.
+ *
+ *    --color-text-accent therefore points at `accent` itself, not at a
+ *    darkened variant. Accent text is also safe on every surface:
+ *    raised 12.16:1, sunk 10.38:1, and on accent-wash 9.92:1.
+ *
  * 2. `ink-faint` is not used for text on `surface` or `surface-sunk`. It is
  *    fine on `surface-raised` (4.82:1), which is where placeholders live, and
  *    it is used as a control border (needs 3:1, SC 1.4.11). Small text that
  *    was ink-faint is now ink-soft.
+ *
+ * GOLD — what it may and may not do. Measured, not assumed:
+ *
+ *   ink on gold        9.37:1   AAA  ✓ the one role it is given
+ *   ink on gold-wash  11.95:1   AAA  ✓
+ *   gold on accent     6.93:1   AA   ✓ the logo's own pairing
+ *   gold on bone       1.64:1   ✗  fails AA text (4.5) AND graphics (3.0)
+ *   white on gold      1.80:1   ✗  illegible, not merely sub-AA
+ *   gold-deep on bone  2.96:1   ✗  still short of the 3:1 graphic bar
+ *
+ * So gold is a BACKGROUND that carries ink, never a foreground on bone. It is
+ * not a text colour, not a fill under white text, and not the boundary of any
+ * interactive control (SC 1.4.11 needs 3:1; gold gives 1.64).
+ *
+ * `band-rule` (gold-deep, 2.96:1) is permitted as a hairline on exactly the
+ * same terms as `rule` below — decorative separation that conveys nothing and
+ * never bounds a control. It is NOT a 3:1 graphic element; it misses.
+ *
+ * Gold is deliberately not darkened to make it pass. The darkest gold present
+ * in the logo is gold-deep, and it still fails 3:1 while already reading as
+ * brown. A gold dark enough to carry white text is not the logo's colour.
  *
  * `rule` (1.32:1) and `rule-strong` (1.75:1) are decorative separators only.
  * They are deliberately NOT used as the boundary of an interactive control,
@@ -153,7 +234,8 @@
  * disabled-text is 2.49:1 and deliberately fails — a disabled control must
  * read as unavailable. WCAG exempts disabled elements.
  *
- * Re-measure anything you change. The clay family sits on the AA line.
+ * Re-measure anything you change. The accent family now has wide margin on
+ * bone, but gold does not — it is the token that will break first.
  */
 
 /* =========================================================================
@@ -240,7 +322,7 @@
 
   /* Danger hover/active, mixed toward ink rather than applied as a brightness
      filter — a filter would drag the label and the border along with the
-     background. The clay family ships its own hover/active; danger did not. */
+     background. The accent family ships its own hover/active; danger did not. */
   --color-danger-hover: color-mix(in oklab, var(--hhf-danger) 88%, var(--hhf-ink));
   --color-danger-active: color-mix(in oklab, var(--hhf-danger) 76%, var(--hhf-ink));
 }

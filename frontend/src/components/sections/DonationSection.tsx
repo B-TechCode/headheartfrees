@@ -43,7 +43,7 @@ export function DonationSection() {
         className={cn(
           "mt-5 inline-flex min-h-11 items-center rounded-sm text-body",
           "text-(--color-text-accent) underline decoration-ink-faint underline-offset-4",
-          "transition-colors duration-150 ease-out hover:decoration-clay",
+          "transition-colors duration-150 ease-out hover:decoration-accent",
           focusRing,
         )}
       >

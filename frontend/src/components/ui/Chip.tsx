@@ -19,8 +19,8 @@ export type ChipProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "aria-pres
 /**
  * Selectable pill, built for the Phase 6 mood chips.
  *
- * Selected state is carried by the clay wash plus a stronger rule and ink text
- * — not by the clay fill. A row of six filled clay chips would spend the
+ * Selected state is carried by the accent wash plus a stronger rule and ink text
+ * — not by the accent fill. A row of six filled accent chips would spend the
  * accent colour that §8 reserves for one deliberate use per view.
  */
 export function Chip({
@@ -43,7 +43,7 @@ export function Chip({
         "font-sans text-body-sm",
         "border transition-[background-color,border-color,color] duration-150 ease-out",
         selected
-          ? "bg-clay-wash border-clay text-ink font-medium"
+          ? "bg-accent-wash border-accent text-ink font-medium"
           : "bg-surface-raised border-ink-faint text-ink-soft enabled:hover:border-ink-soft enabled:hover:text-ink",
         focusRing,
         disabledControl,

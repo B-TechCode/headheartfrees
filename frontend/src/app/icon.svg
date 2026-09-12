@@ -5,8 +5,9 @@
 
     Colour is carried by `color` on the root and read through currentColor, so
     the one file answers both browser chromes: ink on light, bone on dark.
-    Clay was the other candidate and was rejected — at 16px against dark chrome
-    it reads muddy rather than warm.
+    The accent colour was the other candidate and was rejected — at 16px against
+    dark chrome it reads muddy rather than warm. (It was clay then; maroon is
+    darker still, and the objection holds.)
   -->
   <style>
     :root { color: #1A1D26; }

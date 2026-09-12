@@ -14,13 +14,13 @@ import { cn } from "@/lib/cn";
  * Contrast, measured as a graphic (SC 1.4.11 wants 3:1 for the parts required
  * to understand it — here, the arc):
  *
- *   arc, clay on surface         4.14:1   PASS
- *   arc, clay-deep on surface    6.03:1   PASS
- *   arc, ink on surface         15.34:1   PASS
+ *   arc, accent on surface         11.34:1   PASS
+ *   arc, accent-hover on surface    8.37:1   PASS
+ *   arc, ink on surface            15.34:1   PASS
  *
- * The arc clears 3:1 in every colour the product uses, clay included. What did
- * read as washed out was the *track*: at 0.25 opacity it measured 1.37:1 in
- * clay and only 1.69:1 in ink, so it was faint regardless of colour and
+ * The arc clears 3:1 in every colour the product uses, accent included. What did
+ * read as washed out was the *track*: at 0.25 opacity it measured 1.62:1 in
+ * accent and only 1.69:1 in ink, so it was faint regardless of colour and
  * darkening the accent would not have fixed it. The track is the unfilled part
  * of the indicator — decorative under 1.4.11, the same way the empty portion of
  * a progress bar is — so this is a legibility fix, not a conformance one:

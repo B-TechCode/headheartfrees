@@ -14,8 +14,8 @@ export type ButtonSize = "sm" | "md" | "lg";
  */
 const variantClasses: Record<ButtonVariant, string> = {
   primary: cn(
-    "bg-clay text-on-clay border border-transparent",
-    "hover:bg-clay-hover active:bg-clay-active",
+    "bg-accent text-on-accent border border-transparent",
+    "hover:bg-accent-hover active:bg-accent-active",
   ),
   secondary: cn(
     "bg-surface-raised text-ink border border-ink-faint",
@@ -23,7 +23,7 @@ const variantClasses: Record<ButtonVariant, string> = {
   ),
   ghost: cn(
     "bg-transparent text-ink border border-transparent",
-    "hover:bg-clay-wash active:bg-clay-wash active:border-clay-wash",
+    "hover:bg-accent-wash active:bg-accent-wash active:border-accent-wash",
   ),
   destructive: cn(
     "bg-danger text-on-danger border border-transparent",

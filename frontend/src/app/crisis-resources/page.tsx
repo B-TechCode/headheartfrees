@@ -63,7 +63,7 @@ export default function CrisisResourcesPage() {
             target="_blank"
             className={cn(
               "rounded-sm text-(--color-text-accent) underline decoration-ink-faint underline-offset-4",
-              "hover:decoration-clay",
+              "hover:decoration-accent",
               focusRing,
             )}
           >
@@ -100,8 +100,8 @@ export default function CrisisResourcesPage() {
               className={cn(
                 "inline-flex h-14 items-center justify-center rounded-md px-7",
                 "font-sans text-body-lg font-medium",
-                "border border-transparent bg-clay text-on-clay",
-                "transition-colors duration-150 ease-out hover:bg-clay-hover active:bg-clay-active",
+                "border border-transparent bg-accent text-on-accent",
+                "transition-colors duration-150 ease-out hover:bg-accent-hover active:bg-accent-active",
                 focusRing,
               )}
             >

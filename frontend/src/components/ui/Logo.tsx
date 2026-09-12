@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
  * lighter and thinner than the last.
  *
  * Colour comes from `currentColor`, so the mark inherits whatever text colour
- * its container sets — it works on ink, on clay and on bone without a second
+ * its container sets — it works on ink, on accent and on bone without a second
  * file.
  *
  * Two rules from the logo brief, both load-bearing:

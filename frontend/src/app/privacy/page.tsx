@@ -161,7 +161,7 @@ export default function PrivacyPage() {
           className={cn(
             "inline-flex min-h-11 items-center rounded-sm text-body",
             "text-(--color-text-accent) underline decoration-ink-faint underline-offset-4",
-            "hover:decoration-clay",
+            "hover:decoration-accent",
             focusRing,
           )}
         >

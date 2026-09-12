@@ -10,7 +10,7 @@ import { FOOTER_HELPLINES } from "@/lib/helplines";
  * the worst thing in their life, and the wrong version of it does harm:
  *
  * - **No red, no warning icon, no alarm.** Same treatment as the footer strip:
- *   `surface-raised` with a clay hairline. A light left on, not a siren.
+ *   `surface-raised` with a accent hairline. A light left on, not a siren.
  * - **It never names a method.** Some of the trigger phrases in `safety.ts` do;
  *   the copy here does not repeat them back, and must not be edited to.
  * - **It does not diagnose.** No "it sounds like you are in crisis". It says
@@ -34,7 +34,7 @@ export function CrisisPanel() {
       aria-labelledby="crisis-panel-heading"
       className="rounded-lg border border-rule bg-surface-raised p-5 sm:p-6"
     >
-      <span aria-hidden="true" className="block h-px w-10 bg-clay" />
+      <span aria-hidden="true" className="block h-px w-10 bg-accent" />
 
       <h2 id="crisis-panel-heading" className="mt-4 font-display text-h4 text-ink">
         These lines are answered by people.
@@ -63,7 +63,7 @@ export function CrisisPanel() {
               <span
                 className={cn(
                   "underline decoration-ink-faint decoration-from-font underline-offset-4",
-                  "group-hover:text-(--color-text-accent) group-hover:decoration-clay",
+                  "group-hover:text-(--color-text-accent) group-hover:decoration-accent",
                 )}
               >
                 {line.number}
@@ -79,7 +79,7 @@ export function CrisisPanel() {
           href="/crisis-resources"
           className={cn(
             "rounded-sm underline decoration-ink-faint underline-offset-4",
-            "hover:text-(--color-text-accent) hover:decoration-clay",
+            "hover:text-(--color-text-accent) hover:decoration-accent",
             focusRing,
           )}
         >

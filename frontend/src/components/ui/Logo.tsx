@@ -67,19 +67,16 @@ export function Logo({ className, title = "HeadHeartFreeS" }: LogoProps) {
   );
 }
 
-/**
- * The mark plus the wordmark, set in the display serif.
+/*
+ * `Wordmark` — the exhale mark plus "HeadHeartFreeS" in the display serif —
+ * was removed on 2026-09-13 when the navbar moved to the client's logo mark
+ * plus "HHFreeS". The navbar was its only caller.
  *
- * Spacing follows the logo brief: roughly 0.6em between mark and words, with
- * the wordmark at the mark's optical height.
+ * It is deleted rather than left unused deliberately. It rendered the site's
+ * name in full beside a mark the navbar no longer shows, so anyone reaching
+ * for it would have reintroduced a third brand lockup at a moment when there
+ * are already two names in play — see the note in PHASE_LOG and HANDOVER about
+ * the navbar reading HHFreeS while page titles and metadata say
+ * HeadHeartFreeS. `Logo` itself is still used, by the footer brand block and
+ * the hero watermark, and is still the favicon via app/icon.svg.
  */
-export function Wordmark({ className }: { className?: string }) {
-  return (
-    <span className={cn("inline-flex items-center gap-[0.6em]", className)}>
-      <Logo title={null} className="h-7 w-7 shrink-0" />
-      <span className="font-display text-h4 leading-none font-semibold tracking-[-0.01em]">
-        HeadHeartFreeS
-      </span>
-    </span>
-  );
-}

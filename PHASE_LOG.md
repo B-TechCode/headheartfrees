@@ -6230,3 +6230,175 @@ A proper redraw would fix, in order of how much it matters:
 With 1-4 the mark could plausibly take the navbar and this component's minimum
 size could drop. Until then the exhale mark holds it, and that is the right
 outcome rather than a compromise.
+
+---
+
+# 2026-09-13 — the traced logo replaces the wordmark in the navbar, against recommendation
+
+## 0. The plain statement
+
+**The mark in the navbar is below the legibility this log already measured for
+it, and it ships anyway at the client's request.**
+
+The previous entry measured this file at navbar size and recommended against it.
+Nothing has changed that assessment and nothing here revises it. At the 32px
+that shipped, the face profile is gone — no nose, lip or chin — and what remains
+reads as a loop with a leaf. The client was shown the renders and the numbers
+and chose it. It is built as well as this file can be built; the file is the
+limit, not the implementation.
+
+## 1. What is in the navbar
+
+The cleaned mark (`public/logo-mark.svg`, 4.6KB) at 32px, then "HHFreeS" as
+**live text** in the display serif. Not the traced lettering from inside the
+SVG — those glyphs were split out during cleaning and stay out. Live text is
+crisp at any zoom, restyles with the type scale, and is selectable and
+translatable; traced lettering is none of those.
+
+No tagline in the navbar: "Empty Head & Free the Heart" would set around 3px
+tall in a 64px header. It moved to the footer brand block, beneath the mark,
+where it measures 24px tall and is `ink-soft` at 8.52:1 on surface-sunk.
+
+## 2. Size: 24, 32 and 40px measured, 32 chosen
+
+Rendered in the real navbar and measured off the pixels, isolating the mark from
+the text:
+
+| mark height | ink coverage | mean ink | darkest 5% | vs wordmark cap |
+|---|---|---|---|---|
+| 24px | 38.0% | 1.82:1 | 5.40:1 | 1.9x |
+| 32px | 35.0% | 1.97:1 | 7.41:1 | 2.5x |
+| 40px | 32.1% | **2.12:1** | **8.59:1** | 3.2x |
+
+**40px is measurably the best on every legibility metric**, which is expected:
+this file's failure mode is scale-dependent, so bigger is monotonically better
+for it. The gain is not linear — 24→32 buys +2.01 on the darkest band, 32→40
+only +1.18 — and at 40px the mark stands 3.2x the wordmark's cap height, reads
+mark-heavy, and leaves 12px clearance in the 64px header.
+
+32px was chosen: it takes the larger share of the available gain and balances
+against the wordmark. 24px was ruled out — at 1.82:1 mean it reads as a smudge
+beside the text and adds nothing.
+
+**None of the three recovers the face profile.** Choosing between them is
+choosing how large an illegible mark is, not whether it becomes legible.
+
+## 3. The name conflict, chosen not missed
+
+**Decided 2026-09-13.** The navbar now reads **HHFreeS**. The footer, page
+titles, browser tab, metadata and all body copy continue to read
+**HeadHeartFreeS**. The client was told and chose this.
+
+Nothing else was renamed, deliberately. Both names are inventoried here so that
+if this is ever revisited the work is already scoped:
+
+- **"HHFreeS" as user-visible text: exactly one place** —
+  `components/layout/Navbar.tsx`, in `NavBrand`. Other occurrences in that file
+  and in `ui/Logo.tsx` are comments.
+- **"HeadHeartFreeS": 20 files** — `app/layout.tsx` (metadata title template),
+  `app/icon.svg` (favicon aria-label), `components/layout/Footer.tsx`,
+  `components/ui/Logo.tsx` (the `Logo` default `title`), the page files for
+  `/`, `/about`, `/community-guidelines`, `/contact`, `/crisis-resources`,
+  `/login`, `/privacy`, `/register`, `/support`, plus `lib/api.ts`,
+  `lib/contact.ts`, `lib/support.ts` and four test files.
+
+Reconciling would mean changing the metadata title template, which changes every
+browser tab and every search result. That is a client decision, not a cleanup.
+
+## 4. The exhale mark after this change
+
+It leaves the navbar. It is **not** dead — it still appears:
+
+- **`app/icon.svg` — the favicon.** Unchanged, and it stays: this is the one
+  mark that works at 16px, which the traced file cannot.
+- **`components/layout/Footer.tsx:94`** — the footer brand block, at 32px.
+- **`components/sections/Hero.tsx:105`** — the ghosted hero watermark at
+  `text-accent/25`.
+- **`components/ui/MoodIcon.tsx`** borrows its line language, by reference.
+
+**`Wordmark` became dead code and was deleted.** The navbar was its only caller.
+It is removed rather than left unused on purpose: it rendered the exhale mark
+plus "HeadHeartFreeS", so anyone reaching for it would have reintroduced a third
+brand lockup at exactly the moment there are already two names in play. A note
+in `Logo.tsx` records what it was and why it went. `Logo` itself is untouched.
+
+## 5. Mobile: the brief's fallback was not needed
+
+The brief allowed hiding the wordmark below `sm` if mark plus text would not fit
+beside the menu button. Measured, it fits:
+
+| width | brand link | wordmark | clearance to menu button | h-overflow |
+|---|---|---|---|---|
+| 320 | 129x40 | shown | 115px | none |
+| 375 | 129x40 | shown | 170px | none |
+| 414 | 129x40 | shown | 209px | none |
+| 768 | 129x40 | shown | nav row | none |
+
+At 320px the brand is 129px and the menu button 44px inside 288px of usable
+width. **The wordmark therefore shows at every width.**
+
+The responsive version was built first and rejected on evidence. Hiding the
+visible text below `sm` requires a second `sr-only` copy for the accessible
+name, and the accessibility tree confirmed the result: the link's name came back
+as **"HHFreeSHHFreeS"**. `textContent` and `sr-only` do not respect `display:
+none` the way the two-span assumption needed. One always-visible element that is
+always in the accessibility tree cannot desync, so that is what ships.
+
+Verified from the CDP accessibility tree, not from markup:
+`role=link, name="HHFreeS"` at both 320px and 1440px, and the mark
+`ignored=true, reason=ariaHiddenElement`. **The brand is announced once.**
+
+## 6. CLS
+
+Six routes, 1440x900, `layout-shift` entries with `hadRecentInput` excluded:
+
+| route | CLS |
+|---|---|
+| `/about` | **0** |
+| `/login` | **0** |
+| `/vent` | **0** |
+| `/support` | **0** |
+| `/` | 0.021 |
+| `/voices` | 0.084 |
+
+**No shift entry on any route has a source inside `<header>`.** Every source was
+checked: on `/` it is the hero block reflowing (a section, the watermark svg,
+two text blocks, all shifting ~29px vertically); on `/voices` it is the footer
+being repositioned as the list loads. Both are pre-existing and both are under
+the 0.1 "good" threshold.
+
+The footer tagline was cleared as a cause: the footer settles at 762px on `/`,
+`/about`, `/voices` and `/support` alike, with the tagline present and 24px tall
+on each — and the two routes that carry the tagline with no client-loaded
+content measure exactly 0.
+
+The mark contributes no shift because its size is `width`/`height`
+**attributes**. This is the same CSP constraint recorded in the previous entry:
+`style-src 'self'` silently drops `style={{ width }}`, which builds clean,
+typechecks clean and renders at the wrong size. Attributes are presentational
+markup, so the directive does not touch them, and they reserve the box before
+the file arrives. No inline styles were added anywhere in this change.
+
+## 7. Audits
+
+- **Lighthouse accessibility 100 on all 15 scorable routes**; `/nope-404`
+  unscorable as always (`ERRORED_DOCUMENT_REQUEST`).
+- **axe-core: 0 violations, 0 incomplete, across all 16 routes** including
+  `/nope-404`. 21-27 rules passed per route.
+- 107 tests / 18 files pass, typecheck clean, lint clean, build clean.
+
+**The stale-`.next` trap bit twice more in this phase**, both times presenting
+as something else. Once the running server held port 3000 so a fresh `npm start`
+died with `EADDRINUSE` and the old process kept serving the previous build — the
+navbar rendered the old exhale wordmark for three screenshots before the cause
+was found. Kill every listener on 3000 and confirm the port is free *before*
+rebuilding; `netstat -ano | grep :3000` can show more than one PID.
+
+## 8. What would change this
+
+Nothing about this implementation. The mark needs redrawing — real curves
+instead of 1,100 straight segments, one continuous stroke per element instead of
+eight posterised bands, and a face profile drawn thick enough with few enough
+inflections to survive to 32px. The previous entry lists these in priority
+order. When a proper vector exists, the navbar is the first place it should go,
+and `MARK_H` in `NavBrand` is the one number to revisit.

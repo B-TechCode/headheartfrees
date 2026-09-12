@@ -92,6 +92,19 @@ export function Footer() {
         >
           <div className="min-w-0 max-w-md">
             <Logo title={null} className="h-8 w-8 text-ink" />
+
+            {/*
+              The logo's own tagline, which lives here because it cannot live in
+              the navbar: at a 64px header it would set around 3px tall. Here it
+              has room to be read. It sits with the mark rather than at the foot
+              of the column because it is part of the brand lockup, not footer
+              copy — if it ever needs to move, move it as a unit.
+
+              `ink-soft` is 8.52:1 on surface-sunk; `ink-faint` is 4.12:1 there
+              and is ruled out for text on this surface by globals.css §1.
+            */}
+            <p className="mt-3 text-body-sm text-ink-soft">Empty Head &amp; Free the Heart</p>
+
             <p className="mt-4 font-display text-h4 text-ink">A place to put it down.</p>
             <p className="mt-2 text-body-sm text-ink-soft">
               What you write here never leaves your browser. It is not stored, not sent, and

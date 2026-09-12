@@ -819,6 +819,40 @@ delivered, and someone should know them before deciding what to do next.
    destroy the one thing it runs on. Real numbers become available in Phase 7,
    when the feedback wall goes live.
 
+8. **The site uses two names, and this was chosen on 2026-09-13.** The navbar
+   reads **HHFreeS**. The footer, page titles, browser tab, metadata and all
+   body copy read **HeadHeartFreeS**. The client was shown this and chose it; it
+   is not an oversight and it was not missed in review.
+
+   Both names are inventoried so the work is already scoped if it is revisited:
+
+   - **"HHFreeS" as user-visible text appears in exactly one place** —
+     `frontend/src/components/layout/Navbar.tsx`, in the `NavBrand` component.
+   - **"HeadHeartFreeS" appears in 20 files** — `app/layout.tsx` (the metadata
+     title template), `app/icon.svg`, `components/layout/Footer.tsx`,
+     `components/ui/Logo.tsx` (the `Logo` default `title`), the page files for
+     `/`, `/about`, `/community-guidelines`, `/contact`, `/crisis-resources`,
+     `/login`, `/privacy`, `/register` and `/support`, plus `lib/api.ts`,
+     `lib/contact.ts`, `lib/support.ts` and four test files.
+
+   Reconciling in either direction means editing the metadata title template,
+   which changes every browser tab and every search result for the site. That is
+   a client decision rather than a tidy-up, which is why it has not been done.
+
+9. **The navbar logo is below the legibility it was measured against, and ships
+   anyway at the client's request.** The supplied logo is an auto-trace of a
+   JPEG. At the 32px it runs at in the navbar, the face profile is gone and mean
+   ink contrast is 1.97:1, where the exhale mark it replaced held 4.45:1. The
+   client was shown the renders and the measurements and chose it. PHASE_LOG
+   (2026-09-13) has the full numbers at 24, 32 and 40px.
+
+   The fix is a properly drawn vector, not a code change: real curves instead of
+   1,100 straight line segments, one continuous stroke per element instead of
+   eight posterised colour bands, and a face profile drawn to survive small
+   sizes. When one exists, `MARK_H` in `NavBrand` is the single number to
+   revisit. **The favicon is unaffected** — `app/icon.svg` is still the exhale
+   mark, which is the only mark here that works at 16px.
+
 ---
 
 ## 11. Questions worth asking before extending this

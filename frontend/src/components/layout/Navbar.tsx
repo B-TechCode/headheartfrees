@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { Wordmark } from "@/components/ui/Logo";
 import { focusRing } from "@/components/ui/styles";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { useSession } from "@/lib/auth/SessionProvider";
@@ -90,7 +89,7 @@ export function Navbar() {
           href="/"
           className={cn("rounded-sm text-ink transition-colors hover:text-accent-hover", focusRing)}
         >
-          <Wordmark />
+          <NavBrand />
         </Link>
 
         {/*
@@ -283,6 +282,76 @@ function MobileAccountItems({ user }: { user: UserSummary }) {
         </li>
       ) : null}
     </>
+  );
+}
+
+/**
+ * The navbar brand: the client's logo mark, then "HHFreeS" in live display serif.
+ *
+ * ---------------------------------------------------------------------------
+ * This ships against the measured recommendation, at the client's request.
+ * ---------------------------------------------------------------------------
+ *
+ * The mark is an auto-trace of a JPEG and it was measured at exactly these
+ * sizes before it went in. At 32px the face profile is gone — no nose, lip or
+ * chin — and what is left reads as a loop with a leaf. Ink coverage climbs from
+ * 17.6% at 160px to 30.0% at 32px, which is the gaps closing rather than the
+ * drawing surviving, and mean ink falls to 1.81:1 against bone where the exhale
+ * mark it replaces held 4.45:1. The client was shown this and chose it anyway.
+ * See PHASE_LOG. If a properly drawn vector is ever commissioned, this is the
+ * first place it should go.
+ *
+ * Three things here are deliberate and should survive a redesign:
+ *
+ * 1. **The wordmark is live text, not the traced glyphs.** The supplied SVG
+ *    contains its own "HHFreeS" lettering as filled polygons; those were split
+ *    out during cleaning and are not used. Text renders crisp at every size and
+ *    zoom level, restyles with the type scale, and is selectable and
+ *    translatable. Traced lettering is none of those things.
+ *
+ * 2. **No tagline.** "Empty Head & Free the Heart" would set around 3px tall in
+ *    a 64px navbar. It lives in the footer instead, where it can be read.
+ *
+ * 3. **The mark is `aria-hidden`.** The text beside it already carries the
+ *    name; announcing it twice helps nobody. Same reasoning as the `title={null}`
+ *    pattern in Logo.
+ *
+ * Sizing is width/height ATTRIBUTES, not CSS. They are presentational markup,
+ * so `style-src 'self'` does not touch them — and they reserve the box before
+ * the file arrives, which is what keeps CLS at 0.
+ */
+
+/** Artwork aspect from the cleaned viewBox (291x222). Wider than tall. */
+const MARK_H = 32;
+const MARK_W = Math.round((MARK_H * 291) / 222);
+
+function NavBrand() {
+  return (
+    <span className="inline-flex items-center gap-[0.5em]">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/logo-mark.svg"
+        alt=""
+        aria-hidden="true"
+        width={MARK_W}
+        height={MARK_H}
+        decoding="async"
+        className="shrink-0"
+      />
+      {/*
+        Shown at every width, including 320px, because it measured as fitting
+        there: the brand is 130px and the menu button 44px inside 288px of
+        usable width, leaving ~114px spare. The responsive fallback this brief
+        allowed for — mark alone below `sm` — would have needed a second copy of
+        the text for the accessible name, putting "HHFreeS" in the DOM twice.
+        One element that is always visible and always in the accessibility tree
+        is both simpler and safer, so it is what ships. If the navbar ever gains
+        another control on this row, re-measure before assuming it still fits.
+      */}
+      <span className="font-display text-h4 leading-none font-semibold tracking-[-0.01em]">
+        HHFreeS
+      </span>
+    </span>
   );
 }
 

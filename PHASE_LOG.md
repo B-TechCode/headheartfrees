@@ -6032,3 +6032,201 @@ The logo itself is untouched. The JPEG cannot go on the site — opaque off-whit
 background, strokes below a pixel at navbar size, and a wordmark reading
 "HHFreeS" where the site says "HeadHeartFreeS". It needs tracing to SVG by a
 designer. The exhale mark stays in place.
+
+---
+
+# Post-phase-9 — the traced logo: cleaned, measured, and kept out of the navbar
+
+The client supplied `HHFreeS_logo_vector.svg`, an auto-trace of the JPEG. The
+brief was explicit that it might not be usable and that saying so was part of
+the job. It is not usable at navbar size. It is now on `/about` and `/login`
+only, inside a circle, and the exhale mark keeps the navbar and the favicon.
+
+## 1. Cleaning
+
+| | Before | After |
+|---|---|---|
+| File size | 14,297 B | **4,603 B** (-68%) |
+| Background rect | opaque `#f7f5f2` | removed |
+| Paths / fills | 9 | 8 |
+| Points | 1,332 | 1,100 |
+| viewBox | `0 0 1000 544` | `0 0 291 222` |
+
+Cleaned file is `public/logo-mark.svg`; the supplied original is untouched at
+`public/HHFreeS_logo_vector.svg` (it arrived named `.svg.svg`, renamed once).
+
+**The wordmark was not in one path.** The charcoal path (`rgb(80,80,79)`,
+y 342-438) was pure wordmark and was dropped whole. But the darkest maroon path
+spanned y 96-410 — it held the two "H" glyphs *and* mark geometry in a single
+`d` attribute. Deleting it would have taken the face profile with it. It was
+split into subpaths, the two glyphs dropped (232 points), the rest kept. Anyone
+re-doing this from the original should know the fills do not map to elements.
+
+SVGO with `floatPrecision: 1` and `removeViewBox: false` did the rest.
+
+## 2. It does not work at navbar size
+
+Rendered at 24, 32 and 40px in headless Chrome at 1x and inspected, not assumed.
+
+**The face profile is gone.** Not degraded — absent. No nose, no lip, no chin
+at any of the three sizes; it reads as a loop with a leaf. Ink coverage in the
+face region:
+
+| | 160px | 40px | 32px | 24px |
+|---|---|---|---|---|
+| face region ink | 24.3% | 37.5% | 43.2% | **53.6%** |
+| whole mark ink | 17.6% | 26.9% | 30.0% | **34.4%** |
+
+Coverage doubling as the mark shrinks is what filling-in looks like when you
+count it: the gaps that *make* a profile are the first thing to close.
+
+**The eight bands never read as a gradient.** At 160px they read as dashes —
+each stroke is a chain of disconnected blobs rather than a line. At navbar size
+they average into a pale mauve and the deep maroon never renders at all:
+
+| mean ink colour | 160px | 40px | 32px | 24px |
+|---|---|---|---|---|
+| traced logo | `#A78280` 3.11:1 | `#C5ADAA` 1.93:1 | `#C9B3B0` 1.81:1 | `#D0BDB9` **1.64:1** |
+| exhale mark (current) | `#53545A` 6.87:1 | 4.45:1 | 4.45:1 | **3.65:1** |
+
+The exhale mark holds 2x the presence at every size and its coverage is
+scale-stable (16.8% → 22.9%) where the trace nearly doubles. That is the whole
+argument for leaving the navbar alone.
+
+**Faceting** from the straight-line tracing is visible at 160px and not at
+navbar size, only because nothing is.
+
+**Two further findings.** On an accent fill the mark half-disappears: its
+darkest band `#581928` against `--hhf-accent` `#5E1D2C` is **1.07:1**, because
+the accent token was sampled from this very logo last phase. It can never sit
+on an accent surface. And on every light surface the three lightest bands are
+1.27-1.91:1, so part of the mark is always near-invisible — it can only ever be
+decorative, and is `aria-hidden` accordingly.
+
+## 3. The circle
+
+Requested as a framing treatment. **It frames the mark; it does not fix it.**
+Legibility is a property of the trace, and the circle changes none of it. If a
+properly drawn vector is ever commissioned, the circle is an independent design
+decision that can be kept or dropped on its own merits.
+
+**What fills it.** Nothing bone-ish can define the circle — measured against the
+surfaces it sits on, every candidate is invisible:
+
+| fill | vs surface | vs raised | vs sunk |
+|---|---|---|---|
+| bone-raised | 1.07 | 1.00 | 1.17 |
+| bone | 1.00 | 1.07 | 1.09 |
+| bone-sunk | 1.09 | 1.17 | 1.00 |
+| accent-wash | 1.14 | 1.23 | 1.05 |
+| gold-wash | 1.28 | 1.38 | 1.18 |
+| gold | 1.64 | 1.75 | 1.50 |
+
+Going darker to make the disc visible costs the artwork: on a gold fill the
+lightest bands drop to 1.18:1 and the wing dissolves. So `surface-raised` was
+chosen for two reasons that are not about the disc being visible — it is
+closest to the artwork's own `#f7f5f2` ground, and it gives the dark structural
+bands their best contrast of any candidate (12.95:1, against 12.08 on bone and
+11.06 on sunk).
+
+**The border is what makes the circle a circle.** `band-rule` (gold-deep
+`#AA8871`) — the token added last phase for decorative hairlines, which until
+now had no use. It is the logo's own colour, sampled from the wing tip.
+
+Measured off the rendered page, not computed: the page renders `#F4F1EC` rather
+than the flat `#F7F4EF` token because of the paper-grain overlay, so these are
+true numbers.
+
+| | /about (160px) | /login (128px) |
+|---|---|---|
+| circle fill vs page | 1.10:1 | 1.10:1 |
+| **border ring vs page** | **2.77:1** | **2.60:1** |
+| border ring vs fill | 3.05:1 | 2.86:1 |
+
+The flat token is 2.96:1 on bone; the rendered ring measures lower because a
+1px curved border loses some of itself to antialiasing, and more at the tighter
+128px curvature. **This is below 3:1 and is not claimed otherwise.** It is
+decorative and `aria-hidden`, so SC 1.4.11 does not apply — the same footing as
+`rule` (1.32:1) and `rule-strong` (1.75:1), both already documented as
+decorative-only, and the ring is materially stronger than either. `accent` at
+11.34:1 was rejected: a dark maroon ring reads as a heavy badge and competes
+with the mark it frames.
+
+The mark is contained, never cropped — at 0.66 of the diameter its half-diagonal
+is 0.427x against the circle's 0.5, leaving ~7% breathing room. A crop at this
+aspect would clip the wing tip.
+
+## 4. The CSP nearly shipped this broken, and the DOM measurement caught it
+
+The first version sized the circle with `style={{ width: diameter }}`. It built
+clean, typechecked clean, and the served HTML contained
+`style="width:160px;height:160px"`.
+
+**It rendered at 108x82px.** In the browser, `el.getAttribute('style')` returned
+the string and `el.style.width` returned empty — the browser refused to parse
+it. `next.config.ts` ships `style-src 'self'` with no `'unsafe-inline'` in
+production and documents "zero `style=` attributes and zero `style={{}}` in
+source across every route" as a property worth defending. A grep confirmed the
+new component was the only `style=` in the entire codebase; the invariant had
+held until this change broke it.
+
+**Development relaxes the directive** (`'unsafe-inline'` in dev), so it looks
+correct locally and is wrong once deployed. Nothing in the build, the types or
+the tests catches it. It was caught only by measuring the rendered element
+rather than trusting the emitted markup — which is the same reason the last
+phase measured contrast off the DOM instead of the stylesheet.
+
+The size is now a variant (`md` | `lg`) resolving to literal Tailwind classes
+Tailwind can see at build time. The `<img>` keeps `width`/`height` **attributes**
+— presentational markup, not CSS, so `style-src` does not touch them, and they
+reserve the box. Measured CLS is **0** on both routes.
+
+## 5. Placement
+
+`LogoMark` is a new component alongside `Logo`, not a replacement. `/about` at
+160px, `/login` at 128px, both `aria-hidden` via the `title={null}` pattern
+`Logo` already uses — the page heading names the place, and announcing the brand
+twice helps nobody. The SVG is referenced rather than inlined: 4.6KB that cannot
+use `currentColor` buys nothing in the bundle, and `img-src 'self'` covers it.
+`next/image` is declined for the same reason as in TotpSetup — the optimiser
+does not process SVG, so it would return identical bytes through a wrapper.
+
+## 6. Audits
+
+- **Lighthouse accessibility 100 on all 15 scorable routes**; `/nope-404`
+  unscorable as always (`ERRORED_DOCUMENT_REQUEST`).
+- **axe-core: 0 violations, 0 incomplete, across all 16 routes** including
+  `/nope-404`. A new graphic element is a new contrast surface, and it added
+  nothing — because it is correctly marked decorative.
+- 107 tests pass, typecheck clean, lint clean, build clean, CLS 0.
+
+**One build note, repeating a trap already in this log:** rebuilding while a
+`next start` server held `.next` corrupted the output — `Cannot find module
+'./331.js'`, `__webpack_modules__[moduleId] is not a function`, and 500s on
+routes that were fine minutes earlier. Kill the server *before* `rm -rf .next`.
+It is the same stale-`.next` failure recorded in Phase 9 and it presents as
+broken code rather than as a stale build.
+
+## 7. Honest assessment
+
+**The file is not good enough, and it is shipped only where its faults are least
+visible.** At 160px it is presentable. It is not good: the strokes are dashed
+rather than continuous, the curves are 1,100 straight segments, and the gradient
+is eight flat bands that read as posterisation under any scrutiny. It reads as a
+degraded scan of a logo, which is what it is.
+
+A proper redraw would fix, in order of how much it matters:
+
+1. **Real curves.** Bezier paths instead of 1,100 line segments chasing pixel
+   boundaries. This alone removes the faceting and most of the file size.
+2. **One continuous stroke per element.** The head, the heart and each wing barb
+   should be single stroked paths, not chains of filled polygons. That is what
+   makes the strokes dashed and it is why they break up at every size.
+3. **A real gradient, or 2-3 deliberate flat colours.** Eight posterised bands
+   are an artefact of tracing a JPEG, not a design decision.
+4. **A profile that survives to 24px** — drawn thicker, with fewer inflections,
+   optically corrected for small sizes rather than scaled down from large.
+
+With 1-4 the mark could plausibly take the navbar and this component's minimum
+size could drop. Until then the exhale mark holds it, and that is the right
+outcome rather than a compromise.

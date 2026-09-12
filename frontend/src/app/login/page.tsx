@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PageHeader } from "@/components/sections/PageHeader";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { LogoMark } from "@/components/ui/LogoMark";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -26,6 +27,11 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+      {/* Decorative — the heading names the page. See LogoMark. */}
+      <div className="mb-10 flex justify-center">
+        <LogoMark size="md" />
+      </div>
+
       <PageHeader
         eyebrow="Account"
         title="Sign in"

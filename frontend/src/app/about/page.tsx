@@ -6,6 +6,7 @@ import { Prose } from "@/components/ui/Prose";
 import { cn } from "@/lib/cn";
 import { focusRing } from "@/components/ui/styles";
 import { SectionRule } from "@/components/ui/SectionRule";
+import { LogoMark } from "@/components/ui/LogoMark";
 
 export const metadata: Metadata = {
   title: "About",
@@ -46,6 +47,16 @@ const PRINCIPLES = [
 export default function AboutPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+      {/*
+        The full logo, which only exists on the two pages that can give it room.
+        It is decorative: the heading below already names the place, so this is
+        aria-hidden and adds nothing for a screen reader. See LogoMark for why
+        it is not in the navbar.
+      */}
+      <div className="mb-10 flex justify-center">
+        <LogoMark size="lg" />
+      </div>
+
       <PageHeader
         eyebrow="About"
         title="Why this exists"

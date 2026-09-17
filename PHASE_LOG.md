@@ -6402,3 +6402,284 @@ eight posterised bands, and a face profile drawn thick enough with few enough
 inflections to survive to 32px. The previous entry lists these in priority
 order. When a proper vector exists, the navbar is the first place it should go,
 and `MARK_H` in `NavBrand` is the one number to revisit.
+
+---
+
+# 2026-09-17 — a route to the Google Form, and the copy that has to sit in front of it
+
+## 0. The plain statement
+
+The site has offered one thing: write it down, press the button, it is gone.
+There is now a second offer beside it — a Google Form for someone who wants a
+person to read what they wrote and possibly to reply — and **it is the opposite
+of the vent box in every respect the site has been making promises about.**
+
+That is the whole difficulty of this change. A visitor reaching `/vent` has
+been told on the home page, in `HowItWorks`, on the page itself, on
+`/vent/released` and on `/privacy` that nothing is stored and nobody reads it.
+A link on that page to something that stores everything and is read by a
+person, without saying so, spends the site's credibility at the one place it
+lives. So the copy is the feature here; the link is trivial.
+
+Five things are stated before the link, in both placements:
+
+1. it is sent, and it is stored;
+2. a person reads it;
+3. it goes to Google, not to this site, and Google's terms apply there;
+4. it may ask for contact details, which can be left blank;
+5. no Google account is needed.
+
+## 1. Where it is, and where it deliberately is not
+
+**Not beside "Release & Let Go".** That button means *this disappears*. A
+second button next to it sending the same words to Google muddles the promise
+at the moment it matters most, and someone moving quickly could press the wrong
+one.
+
+It sits in its own block below the composer, behind a `border-rule` hairline,
+under its own `h2`, after the composer's closing line "Nothing you have written
+is sent anywhere." Measured: **494px below the release button at 1440px and
+643px below it at 390px.** Nobody presses one meaning the other.
+
+It is static markup in the server component rather than inside the composer's
+client island — it ships no JavaScript, and it cannot drift into the control
+group where it would read as a second submit. `/vent` stays static at 5.21 kB.
+
+On `/vent/released` it sits below "Leave a note", in the same
+`mt-16 border-t border-rule pt-8` treatment that block already uses, above the
+running-costs line. Below rather than above: "Leave a note" is about this site,
+this is about them, and neither may compete with "Write something else" at the
+top of the page.
+
+**Secondary link treatment, not a filled button.** `secondaryAction`, the
+existing constant. One filled button per section is what tells someone which
+action is the main one; on `/vent` that action is releasing.
+
+## 2. The released-page copy has a job the vent copy does not
+
+By the time anyone reads it, their words are gone. Someone who only realises
+afterwards that they wanted to be heard must not open the form expecting to
+find what they wrote waiting in it.
+
+> What you wrote is gone, so this would be starting again, from a blank page,
+> whenever you feel like it.
+
+Naming the loss and removing the urgency in the same sentence is the whole job
+of that last clause. The five claims still all appear on this page, compressed
+into one paragraph rather than three, because this page sits seconds after a
+release and is quiet on purpose.
+
+## 3. A link, never an embed — and no CSP change
+
+The form is not in an iframe and must not be. Three reasons, any one
+sufficient: the CSP has no `frame-src` and `default-src 'self'` would block it,
+so an embed would mean widening the policy site-wide and permanently for one
+page; a Google document rendered inside a page that promises nothing leaves the
+browser is a contradiction on screen whatever the copy says; and a visitor who
+has left this site should be able to tell that they have — a new tab and
+Google's own chrome say it better than a sentence can.
+
+**Verified after the change.** The served header on `/vent` is the same ten
+directives as before:
+
+```
+default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self';
+img-src 'self' data:; font-src 'self'; connect-src 'self' http://localhost:8080;
+frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'
+```
+
+The only occurrences of `frame-src` or `iframe` anywhere in `frontend/` are in
+the comment in `lib/share.ts` explaining why there are none.
+
+`target="_blank"` with `rel="noopener noreferrer"`, as the footer's social links
+use. The destination is named in the link text — "Open the form on Google
+Forms" — rather than left to the URL, and it carries a visible "(opens in a new
+tab)". Visible rather than screen-reader-only on purpose: the ask was that
+leaving the site be obvious, and a fact only a screen reader hears is obvious
+to a small fraction of visitors. The external-link glyph is drawn to the house
+spec (`0 0 24 24`, `fill="none"`, 1.75 stroke, round caps) and is `aria-hidden`,
+since the anchor already says it in text.
+
+## 4. What was found on the form itself
+
+Fetched cold — no cookies, no credentials — and parsed rather than eyeballed.
+
+**No Google account is required.** `200` with no redirect to
+`accounts.google.com`, the public payload renders in full, and the submit action
+is a live `formResponse` endpoint. No email collection is configured. The "Sign
+in to Google" string in the page is Google's own chrome, not a wall.
+
+That is the good outcome and the reason the copy says so as a reassurance
+rather than a warning: someone who has been told all the way down the page that
+nothing is asked of them will assume a Google link means a sign-in.
+
+The questions, as configured:
+
+| # | Question | Required |
+|---|---|---|
+| 1 | Gender / लिंग | **yes** |
+| 2 | How are you feeling right now? | **yes** |
+| 3 | Lighten your heart — write whatever is on your mind | **yes** |
+| 4 | How are you feeling after writing this? | **yes** |
+| 5 | Do you want me to contact you to listen about this? | no |
+| 6 | If yes, share about you and where to contact | no |
+| 7 | Acknowledge the "not a substitute for treatment" disclaimer | **yes** |
+
+Both contact questions are optional, so "you can leave that blank" is accurate
+rather than hopeful.
+
+**The required gender question is recorded in HANDOVER §2.10 as an observation,
+not a fix.** It is the owner's form. But it is the first thing someone sees
+after a page whose entire proposition is that nothing is asked of them — no
+account, no email, no name — and it cannot be skipped. Whether it earns the
+answers it produces is the owner's judgement; it is one toggle either way. The
+site's copy does not mention it, because a link that lists a form's required
+fields before you open it reads as a warning about the form.
+
+## 5. A decision, not an omission: "100% confidential" is not repeated
+
+The form's own description promises its reader "100% confidential" and
+"100% सुरक्षित और गोपनीय".
+
+**That claim is deliberately not echoed anywhere on this site.** It is the form
+owner's promise to make, on the form. This site cannot vouch for the handling of
+data sitting in someone else's Google account, and a guarantee it has no way to
+keep is exactly the kind of sentence the rest of the site is built to avoid —
+the vent box's claim is checkable from the code, and this one would not be.
+
+This is written down because the natural instinct of a later pass is to
+*align* the two: the form says confidential, the link does not, someone tidies.
+There is a test asserting the absence
+(`ShareInvitation.test.tsx`, "does not repeat the form's own confidentiality
+guarantee"), so the tidy-up fails rather than ships.
+
+## 6. The bilingual form, and which way the inconsistency actually runs
+
+The form is in English and Hindi. The site is English-only. The brief asked
+whether that reads as inconsistent.
+
+**It reads as the form being better than the site, and the copy says so on
+`/vent`** — "The questions are in English and Hindi." Someone who would write
+more freely in Hindi has no way to discover that unless the link says it, and a
+reader who does not need it spends one clause. It is not repeated on
+`/vent/released`, which cannot afford the words.
+
+The honest observation is that the mismatch runs the other way round. This site
+is plainly built for India — UPI on `/support`, Indian helplines first on
+`/crisis-resources`, and a crisis keyword list in `lib/safety.ts` that contains
+Hindi terms. **The monolingual part is the shell around all of that, not the
+form.** A form that meets someone in Hindi is the site reaching further than its
+own chrome does.
+
+**This is the same gap HANDOVER §3.2 already records** — the Hinglish half of
+`safety.ts` was never measured, because the developer could not judge its
+false-positive rate, and it still needs a native speaker before launch. The two
+are one problem seen twice: the site
+handles Hindi where it matters most (deciding whether to show helplines beside
+the writing box) with the least confidence, and handles it not at all
+everywhere else. Whoever reviews that keyword list is the right person to be
+asked whether the site should be bilingual at all. Nothing in this change
+attempts to answer that.
+
+## 7. Ownership — the thing most likely to be missed at handover
+
+**The form is a Google document owned by whoever created it, and every response
+lands in that person's Google Drive.** Nothing in this repository owns it, can
+read it, or can move it. It is the only supplied value in HANDOVER §2 that
+lives somewhere the code cannot reach, and `SHARE_FORM_URL` is a URL to it, not
+a handle on it.
+
+Transferred in Google Forms at handover, or the new owner has a route on their
+own site feeding an inbox they cannot open — and will not necessarily know it,
+because nothing breaks. HANDOVER §2.10 and the §4 revocation table both carry
+it.
+
+`SHARE_FORM_IS_PLACEHOLDER` renders both blocks away entirely — no heading, no
+rule, no link. Unlike `/contact` and `/support`, whose flags keep the value on
+screen behind a notice, there is no useful half-state here: a visitor who has
+just been told a person will read this, and finds a dead link or a form nobody
+owns, has been offered something the site cannot deliver at the moment they
+decided to trust it. Silence is the honest failure, and it costs nothing — the
+vent box is untouched.
+
+**§2.5.1 now names three people, not two.** Whoever owns this form has taken on
+reading it, indefinitely, for as long as the link is on the site — the same
+standing commitment that section already records for the contact inbox and the
+moderation queue, and for the same reasons. It applies here most of all: the
+inbox receives a wide mix and only some of it is heavy, whereas this form
+receives nothing else, from people who were told on the way in that a person
+would read it. If that stops being true, the honest move is the flag, not an
+unread form.
+
+## 8. `/privacy`
+
+Two paragraphs under a heading of their own, a bullet in "Third parties", and a
+sentence in "Requests about your data" saying a request about form responses
+has to reach the form's owner because they are not on this site.
+
+**The sentence that had to stay true stayed true**, and it is now stated
+explicitly rather than merely left standing: nothing typed into the vent box is
+sent anywhere, *including to that form* — the two are separate, the form opens
+in a new tab, and it starts empty. The third-parties bullet makes the same point
+about the page load itself: the form is linked, not embedded, so no part of it
+loads inside this site and reading `/vent` tells Google nothing. That also keeps
+the existing "Fonts are served from this site… loading a page does not tell
+Google that you visited" bullet accurate, which an embed would have broken.
+
+Last-updated date moved to 17 September 2026.
+
+## 9. A copy test, which is unusual here
+
+`ShareInvitation.test.tsx` asserts on sentences, which nothing else in this
+codebase does and which is normally an obstacle to editing copy.
+
+It is right here because **the sentences are the feature.** Remove one of the
+five claims in a tidy-up, a tone pass or a shortening, and the site has misled
+somebody at the point where its credibility lives — and nothing else in the
+codebase would notice. The assertions match on meaning rather than wording: a
+rewrite that still makes the claim can be made to pass by updating a regex; a
+rewrite that drops the claim cannot.
+
+It also pins `SHARE_FORM_IS_PLACEHOLDER === false` while a real URL is
+configured, since a flag left `true` after a real URL is supplied is a silent
+removal of the whole feature.
+
+## 10. Audits
+
+- **axe-core, wcag2a/2aa/21a/21aa: 0 violations, 0 incomplete, across all 16
+  routes**, `/nope-404` included. 21–27 rules passed per route; `/vent` passes
+  25 and `/vent/released` 24, which are the two highest outside the
+  form-carrying routes, since the new anchor brings the link-name checks with
+  it.
+- **Lighthouse accessibility 100 on all 15 scorable routes.**
+- **Lighthouse best-practices 100 on 13 of 15.** `/voices` and `/auth/callback`
+  score 96 on `errors-in-console`, and the error on both is
+  `ERR_CONNECTION_REFUSED` against `localhost:8080` — the backend was not
+  running for this audit. Pre-existing, unrelated to this change, and confirmed
+  by capturing the console on all four routes: `/vent` and `/vent/released` log
+  nothing at all.
+- 117 tests / 19 files pass, typecheck clean, lint clean, build clean on a
+  cleared `.next`.
+- Measured in Chrome rather than jsdom: the link is **46.4px tall at 1440px**
+  and 72.8px at 390px where it wraps to two lines, against the 44px target in
+  PROJECT_BRIEF §8. No horizontal overflow at 390px on either page. Underline
+  `2px` in `ink-faint`, text in `ink` — `secondaryAction` unmodified.
+
+One detail worth recording because the comment in the file originally got it
+wrong: the underline runs under the text on both sides of the external-link
+glyph and **skips the glyph**, which is the browser's own handling of a
+replaced element inside a decorated inline. It reads correctly — checked in a
+screenshot, not assumed — and the comment now says what actually happens.
+
+## 11. What would change this
+
+If the form is ever edited to require sign-in or to collect email addresses,
+claims 3 and 5 become false and `ShareInvitation.tsx` must change in the same
+edit. The header comment in that file lists all five claims for exactly that
+reason, and HANDOVER §2.10 repeats it for whoever owns the form rather than the
+code.
+
+If a third placement is ever wanted, add a variant to `ShareInvitation` rather
+than importing `SHARE_FORM_URL` somewhere new. The constant is not the feature;
+the paragraph in front of it is, and a bare link elsewhere would be the failure
+this entire entry is about.

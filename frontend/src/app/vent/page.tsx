@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ShareInvitation } from "@/components/sections/ShareInvitation";
 import { VentComposer } from "@/components/sections/VentComposer";
 
 export const metadata: Metadata = {
@@ -37,6 +38,18 @@ export default function VentPage() {
       <div className="mt-10">
         <VentComposer />
       </div>
+
+      {/*
+        The other offer, outside the composer island.
+
+        It is static markup in the server component on purpose — it ships no
+        JavaScript, and it cannot end up inside the composer's control group
+        where it would read as a second submit. The composer's closing line,
+        "Nothing you have written is sent anywhere", is the last thing above
+        it; this block then says, behind a rule and under its own heading, that
+        the thing it links to works the opposite way.
+      */}
+      <ShareInvitation variant="vent" />
     </div>
   );
 }

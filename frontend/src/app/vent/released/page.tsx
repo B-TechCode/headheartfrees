@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { FeedbackInvitation } from "@/components/sections/FeedbackInvitation";
+import { ShareInvitation } from "@/components/sections/ShareInvitation";
 import { cn } from "@/lib/cn";
 import { focusRing, secondaryAction } from "@/components/ui/styles";
 
@@ -81,6 +82,17 @@ export default function ReleasedPage() {
         seconds after a release, would read as the price of using the site.
       */}
       <FeedbackInvitation />
+
+      {/*
+        Beside "Leave a note", in the same section treatment, because someone
+        may only realise afterwards that what they wanted was to be read. Below
+        it rather than above: "Leave a note" is about this site, this is about
+        them, and neither may compete with "Write something else" at the top.
+
+        The words are gone by the time this is on screen. The copy opens by
+        saying so — see ReleasedBlock in ShareInvitation.tsx.
+      */}
+      <ShareInvitation variant="released" />
 
       <p className="mt-16 border-t border-rule pt-6 max-w-[60ch] text-body-sm text-ink-soft">
         This runs on a small server and stays free.{" "}

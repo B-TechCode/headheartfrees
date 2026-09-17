@@ -18,11 +18,13 @@ import { SOCIAL_LINKS } from "@/lib/social";
  * page, which is close to the worst available outcome. The name has to be the
  * platform's own — "LinkedIn", never "social link".
  *
- * **2. `rel="noopener noreferrer"` with `target="_blank"`.** These are the only
- * links on the site that open a new tab, and `noopener` is what stops the
- * opened page reaching back through `window.opener`. It is one attribute, it
- * is invisible when it is missing, and nothing else in this codebase needs it,
- * so nothing else would catch its removal.
+ * **2. `rel="noopener noreferrer"` with `target="_blank"`.** `noopener` is what
+ * stops the opened page reaching back through `window.opener`. It is one
+ * attribute and it is invisible when it is missing. Two other places on the
+ * site open a new tab — `findahelpline.com` on `/crisis-resources`, and the
+ * Google Form linked from the vent pages, which has its own assertion in
+ * `sections/ShareInvitation.test.tsx` — and each carries its own copy of the
+ * pair, so nothing here would catch its removal there or the other way round.
  *
  * **3. The row renders from `lib/social.ts` and nothing is hardcoded.** That
  * file is where the handover replacement happens (HANDOVER.md §2.9). A URL

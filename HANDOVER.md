@@ -102,6 +102,14 @@ The moderation queue carries the same note for the person reviewing feedback
 for the same reason. If the inbox and the queue end up with different people,
 both of them should have read this.
 
+**This now applies to a third person: whoever owns the Google Form in §2.10.**
+It applies to them most of all. The inbox and the queue receive a wide mix and
+only some of it is heavy; the form receives nothing else, from people who were
+told on the way in that a person would read it. Owning that form is a standing
+commitment to keep reading it, on the same terms and for the same reasons set
+out above. If the three end up with three different people, all three should
+have read this section.
+
 ### 2.6 A decision on who moderates feedback
 
 The feedback wall is reviewed before anything is published (Phase 7). Someone
@@ -215,6 +223,64 @@ footer of every page, for as long as it stays up. Nobody will report it,
 because to a visitor it looks like it is working.
 
 **Check `frontend/src/lib/social.ts` at handover even if nothing prompts you.**
+
+### 2.10 The Google Form — and it is not owned by the site
+
+`/vent` and `/vent/released` both link to a Google Form, for the case the vent
+box does not serve: someone who wants a person to read what they wrote, and
+possibly to reply. The URL is in one file:
+
+```
+frontend/src/lib/share.ts
+export const SHARE_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSd9IRrw870l0JLS6H2B074NUTIoHX7VA5Qm0LPhPbiX6QGzrQ/viewform"
+export const SHARE_FORM_IS_PLACEHOLDER = false
+```
+
+**The form is a Google document owned by whoever created it, and the responses
+land in that person's Google Drive.** Nothing in this repository owns it, can
+read it, or can move it. It is the only supplied value in section 2 that lives
+somewhere the code cannot reach.
+
+**At handover the form must be transferred to the owner**, in Google Forms, by
+the person who currently holds it — add the owner as an editor, then transfer
+ownership, then remove yourself. Skip that and the outcome is worse than a dead
+link: the site keeps collecting, the responses keep arriving, and they arrive
+in the Drive of someone who has left. The owner has a form on their site that
+they cannot read, and does not necessarily know it.
+
+Setting `SHARE_FORM_IS_PLACEHOLDER = true` removes both blocks from the site
+entirely — no heading, no rule, no link. That is the switch to use if the form
+is ever taken down, or during a handover gap where nobody is reading it. It is
+better than leaving a live link to a form nobody opens, for the reason in
+§2.5.1: this route promises a reader.
+
+**What comes with the form is the same thing that comes with the inbox.**
+Everything in §2.5.1 applies here, and more directly — the inbox mostly
+receives broken links and questions about privacy, whereas this form receives
+only the other thing, from people who have been told a person will read it.
+Whoever owns the form has taken on reading it, indefinitely, for as long as the
+link is on the site. If that stops being true, the honest move is the flag
+above, not an unread form.
+
+**One observation, offered rather than prescribed.** It is the owner's form and
+these are the owner's questions, but the first one, `Gender / लिंग`, is
+required, as are the two mood questions and the disclaimer. Someone reaches
+that form from a page whose entire proposition is that nothing is asked of them
+— no account, no email, no name — and the first thing it asks is a demographic
+question they cannot skip. Whether that is worth the answers it produces is a
+judgement only the owner can make; it is one toggle in Google Forms either way.
+The site's copy does not mention it, because a link that lists a form's
+required fields before you open it reads as a warning about the form.
+
+**What the site's copy commits you to.** Both blocks state, before the link,
+that what is written there is sent and stored, that a person reads it, that it
+goes to Google rather than to this site, that it may ask for contact details
+which can be left blank, and that no Google account is needed. That last one
+was verified against the live form. **If the form is ever changed so that it
+requires sign-in, or collects email addresses, the copy in
+`components/sections/ShareInvitation.tsx` becomes false and must change in the
+same edit.** The header comment in that file lists all five claims for exactly
+this reason.
 
 ---
 
@@ -367,6 +433,7 @@ At handover the owner should assume the developer retains nothing, and verify it
 | The contact inbox (`headheartfrees@gmail.com`) | **Transfers, not revoked.** It is the project's account, not a person's — hand over the password and recovery details, then change the password and remove any other recovery address or device still attached. See §2.5. |
 | Any deployment or database access | Rotate credentials after handover, regardless of trust. |
 | **The developer's address in `APP_ADMIN_BOOTSTRAP_EMAILS`** | **Remove it.** Adding the owner's address is only half the job: the variable is a list, and an address left in it is re-promoted to ADMIN on every restart. Doing one and forgetting the other leaves the developer with permanent admin access — and therefore the moderation queue — on a site they no longer run. Removing the address does not demote an existing admin, so run the SQL below as well. |
+| The Google Form linked from `/vent` and `/vent/released` | **Transfers, not revoked — and it cannot be transferred from this repository.** It is a Google document owned by whoever created it, and every response sits in that person's Drive. In Google Forms: add the owner as an editor, transfer ownership, then remove yourself. Miss this and the site keeps sending people to a form whose answers arrive somewhere the owner cannot reach. The person taking it on is taking on reading it — see §2.10 and §2.5.1. |
 | Developer's social and portfolio links in the site footer | **Still live on every page.** These are the developer's personal accounts, not the project's, and unlike the other placeholders nothing on screen says so. Replace or delete the four URLs in `frontend/src/lib/social.ts` — see §2.9. This is the item most likely to be missed, because nothing breaks if it is. |
 
 After editing `APP_ADMIN_BOOTSTRAP_EMAILS`, demote the developer's account and
@@ -765,7 +832,7 @@ headheartfrees/
     └── src/
         ├── app/        Pages
         ├── components/ ui/ primitives, layout/, sections/, auth/
-        ├── lib/        API client, helplines, safety list, contact
+        ├── lib/        API client, helplines, safety list, contact, share
         │   └── auth/   Session provider, hint cookie, return-to, Google
         └── styles/     globals.css — the only place colour is defined
 ```

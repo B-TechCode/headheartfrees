@@ -86,6 +86,25 @@ export default function PrivacyPage() {
           <Link href="/community-guidelines">community guidelines</Link>.
         </p>
 
+        <h2>The form on Google is a different thing entirely</h2>
+        <p>
+          Below the vent box, and on the page you land on after releasing, there is a link
+          to a Google Form for people who want a person to read what they wrote and possibly
+          to reply. It is the opposite of the vent box in every respect that matters here.
+          What you write in that form is sent, and it is stored. A person reads it. It goes
+          to Google&rsquo;s servers rather than to this site, so Google&rsquo;s terms and
+          privacy policy govern it there, and this site neither receives a copy nor can
+          delete one for you. The form asks whether you would like to be contacted about
+          what you wrote and where to reach you; both of those questions are optional and
+          can be left blank.
+        </p>
+        <p>
+          <strong>None of that changes the sentence above.</strong> Nothing typed into the
+          vent box is sent anywhere, including to that form &mdash; the two are separate,
+          the form opens in a new tab, and it starts empty. Opening the link is a
+          deliberate act, and the page says what it means before you take it.
+        </p>
+
         <h2>Accounts do not exist yet</h2>
         <p>
           <strong>
@@ -128,6 +147,12 @@ export default function PrivacyPage() {
             page does not tell Google that you visited.
           </li>
           <li>
+            <strong>Google</strong> receives whatever you send it through the form described
+            above, but only if you open that link and submit it. The form is linked, not
+            embedded: no part of it loads inside this site, so simply reading the vent page
+            tells Google nothing.
+          </li>
+          <li>
             <strong>No analytics.</strong> There is no Google Analytics, no Meta pixel, no
             heatmap tool, no session recorder on this site.
           </li>
@@ -146,6 +171,11 @@ export default function PrivacyPage() {
         <p>
           Because vent text is never collected, there is nothing to request or erase. For
           feedback you have submitted, you can ask for a copy or for removal by email.
+        </p>
+        <p>
+          Anything you sent through the Google Form is held in the form owner&rsquo;s Google
+          account rather than on this site, so a request about it has to go to them. Email
+          the address below and it will be passed on.
         </p>
 
         <h2>Changes</h2>
@@ -170,7 +200,7 @@ export default function PrivacyPage() {
       </p>
 
       <p className="mt-8 border-t border-rule pt-5 text-caption text-ink-soft">
-        Last updated 4 September 2026. Written against the software as built on that date.
+        Last updated 17 September 2026. Written against the software as built on that date.
       </p>
     </div>
   );
